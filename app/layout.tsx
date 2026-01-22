@@ -10,7 +10,7 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "GUDKEJA - Portal Gudep",
   description: "Portal manajemen Gugus Depan untuk Kegiatan Pramuka",
-  generator: "v0.app",
+  generator: "muzzie",
 }
 
 export default function RootLayout({

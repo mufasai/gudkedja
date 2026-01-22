@@ -128,7 +128,7 @@ export default function DashboardPage() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-xl sm:text-2xl font-bold text-card-foreground mb-2">Menu Utama GUDKEJA</h2>
-          <p className="text-muted-foreground">Selamat datang, {username}</p>
+          <p className="text-muted-foreground">Selamat datang, Pembina</p>
         </div>
 
         {/* Menu Grid - Responsive: 1 col mobile, 2 cols tablet, 3 cols desktop */}

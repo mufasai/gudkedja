@@ -34,28 +34,27 @@ export default function LoginPage() {
 
       // Check if input is a username (not an email format)
       if (!emailOrUsername.includes("@")) {
-        if (isDev) console.log("Detected as username, looking up email from database...")
+        if (isDev) console.log("Detected as username, looking up email from login_usernames table...")
 
-        // Query database untuk get email berdasarkan username
-        // Ini lebih aman karena tidak hardcode email di frontend
-        const { data: pembinaData, error: pembinaError } = await supabase
-          .from("data_pembina")
-          .select("email, username, nama_lengkap")
+        // Query tabel login_usernames (terpisah dari data_pembina)
+        const { data: usernameData, error: usernameError } = await supabase
+          .from("login_usernames")
+          .select("email, username")
           .eq("username", emailOrUsername)
           .single()
 
         if (isDev) {
-          console.log("Query result:", pembinaData)
-          console.log("Query error:", pembinaError)
+          console.log("Query result:", usernameData)
+          console.log("Query error:", usernameError)
         }
 
-        if (pembinaError || !pembinaData?.email) {
-          if (isDev) console.error("Username lookup failed:", pembinaError)
+        if (usernameError || !usernameData?.email) {
+          if (isDev) console.error("Username lookup failed:", usernameError)
           throw new Error("Username tidak ditemukan. Hubungi admin untuk setup username Anda.")
         }
 
-        loginEmail = pembinaData.email
-        if (isDev) console.log("Found email from database:", loginEmail)
+        loginEmail = usernameData.email
+        if (isDev) console.log("Found email from login_usernames:", loginEmail)
       } else {
         if (isDev) console.log("Detected as email, using directly")
       }
