@@ -6,8 +6,9 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
-import { SKU_CONFIG, type JenisSKU, TKK_SIAGA_WAJIB, TKK_SIAGA_PILIHAN, type TKKItem } from "@/lib/sku-data"
+import { SKU_CONFIG, type JenisSKU, TKK_SIAGA_WAJIB, TKK_SIAGA_PILIHAN, type TKKItem, type SyaratSKU, getSyaratText, hasSyaratSubItems } from "@/lib/sku-data"
 
 interface PesertaRecord {
   id: number
@@ -336,7 +337,7 @@ function SKUChecklist({
   onBack: () => void
 }) {
   const config = SKU_CONFIG[jenisSKU]
-  const [progress, setProgress] = useState<Record<number, { status: string; tanggal: string; pembina: string }>>({})
+  const [progress, setProgress] = useState<Record<number, { status: string; tanggal: string; pembina: string; agama_dipilih?: string }>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showSuratModal, setShowSuratModal] = useState(false)
@@ -351,12 +352,13 @@ function SKUChecklist({
         .eq("jenis_sku", jenisSKU)
 
       if (data) {
-        const progressMap: Record<number, { status: string; tanggal: string; pembina: string }> = {}
+        const progressMap: Record<number, { status: string; tanggal: string; pembina: string; agama_dipilih?: string }> = {}
         data.forEach((item: any) => {
           progressMap[item.syarat_nomor] = {
             status: item.status,
             tanggal: item.tanggal_uji || "",
             pembina: item.pembina_penguji || "",
+            agama_dipilih: item.agama_dipilih || "",
           }
         })
         setProgress(progressMap)
@@ -367,7 +369,7 @@ function SKUChecklist({
   }, [peserta.id, jenisSKU])
 
   const lulusCount = Object.values(progress).filter((p) => p.status === "lulus").length
-  const isAllLulus = lulusCount === config.jumlah_syarat
+  const isAllLulus = lulusCount === config.jumlah_syarat && lulusCount > 0
 
   const handleToggle = (nomor: number) => {
     setProgress((prev) => {
@@ -375,7 +377,7 @@ function SKUChecklist({
       if (current?.status === "lulus") {
         return {
           ...prev,
-          [nomor]: { status: "belum", tanggal: "", pembina: "" },
+          [nomor]: { status: "belum", tanggal: "", pembina: "", agama_dipilih: "" },
         }
       } else {
         return {
@@ -384,13 +386,14 @@ function SKUChecklist({
             status: "lulus",
             tanggal: new Date().toISOString().split("T")[0],
             pembina: current?.pembina || "",
+            agama_dipilih: current?.agama_dipilih || "",
           },
         }
       }
     })
   }
 
-  const handleDetailChange = (nomor: number, field: "tanggal" | "pembina", value: string) => {
+  const handleDetailChange = (nomor: number, field: "tanggal" | "pembina" | "agama_dipilih", value: string) => {
     setProgress((prev) => ({
       ...prev,
       [nomor]: {
@@ -398,6 +401,7 @@ function SKUChecklist({
         status: prev[nomor]?.status || "belum",
         tanggal: prev[nomor]?.tanggal || "",
         pembina: prev[nomor]?.pembina || "",
+        agama_dipilih: prev[nomor]?.agama_dipilih || "",
         [field]: value,
       },
     }))
@@ -407,29 +411,61 @@ function SKUChecklist({
     setSaving(true)
     const supabase = createClient()
 
-    // Delete existing progress for this peserta and jenis_sku
-    await supabase
-      .from("sku_progress")
-      .delete()
-      .eq("peserta_id", peserta.id)
-      .eq("jenis_sku", jenisSKU)
+    try {
+      // Gunakan upsert untuk setiap item secara individual
+      const updates = Object.entries(progress).map(([nomor, data]) => ({
+        peserta_id: peserta.id,
+        jenis_sku: jenisSKU,
+        syarat_nomor: parseInt(nomor),
+        status: data.status,
+        tanggal_uji: data.tanggal || null,
+        pembina_penguji: data.pembina || null,
+        agama_dipilih: data.agama_dipilih || null,
+      }))
 
-    // Insert new progress
-    const inserts = Object.entries(progress).map(([nomor, data]) => ({
-      peserta_id: peserta.id,
-      jenis_sku: jenisSKU,
-      syarat_nomor: parseInt(nomor),
-      status: data.status,
-      tanggal_uji: data.tanggal || null,
-      pembina_penguji: data.pembina || null,
-    }))
+      // Upsert satu per satu untuk menghindari konflik
+      for (const update of updates) {
+        const { error } = await supabase
+          .from("sku_progress")
+          .upsert(update, {
+            onConflict: 'peserta_id,jenis_sku,syarat_nomor'
+          })
 
-    if (inserts.length > 0) {
-      await supabase.from("sku_progress").insert(inserts)
+        if (error) {
+          console.error("Error upserting item:", error, update)
+          throw error
+        }
+      }
+
+      alert("Progress berhasil disimpan!")
+
+      // Refresh data setelah save
+      const { data: refreshData, error: fetchError } = await supabase
+        .from("sku_progress")
+        .select("*")
+        .eq("peserta_id", peserta.id)
+        .eq("jenis_sku", jenisSKU)
+
+      if (fetchError) {
+        console.error("Error fetching refresh data:", fetchError)
+      } else if (refreshData) {
+        const progressMap: Record<number, { status: string; tanggal: string; pembina: string; agama_dipilih?: string }> = {}
+        refreshData.forEach((item: any) => {
+          progressMap[item.syarat_nomor] = {
+            status: item.status,
+            tanggal: item.tanggal_uji || "",
+            pembina: item.pembina_penguji || "",
+            agama_dipilih: item.agama_dipilih || "",
+          }
+        })
+        setProgress(progressMap)
+      }
+    } catch (error: any) {
+      console.error("Error saving progress:", error)
+      alert(`Gagal menyimpan progress: ${error.message || 'Silakan coba lagi'}`)
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
-    alert("Progress berhasil disimpan!")
   }
 
   if (loading) {
@@ -460,6 +496,7 @@ function SKUChecklist({
             <span>Progress</span>
             <span className={isAllLulus ? "text-emerald-600 font-bold" : ""}>
               {lulusCount} / {config.jumlah_syarat}
+              {isAllLulus && " ✓"}
             </span>
           </div>
           <div className="w-full bg-secondary rounded-full h-3">
@@ -468,16 +505,23 @@ function SKUChecklist({
               style={{ width: `${(lulusCount / config.jumlah_syarat) * 100}%` }}
             />
           </div>
+          {!isAllLulus && lulusCount > 0 && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Masih ada {config.jumlah_syarat - lulusCount} syarat yang belum lulus
+            </p>
+          )}
         </div>
 
         {isAllLulus && (
-          <div className="p-3 bg-emerald-100 border border-emerald-300 rounded-lg text-emerald-700 text-center">
-            <p className="font-bold">🎉 STATUS: LULUS</p>
+          <div className="p-4 bg-emerald-100 border-2 border-emerald-300 rounded-lg text-emerald-700 text-center mb-4">
+            <p className="font-bold text-lg mb-2">🎉 STATUS: LULUS</p>
+            <p className="text-sm mb-3">Semua syarat telah terpenuhi!</p>
             <Button
               onClick={() => setShowSuratModal(true)}
-              className="mt-2 bg-emerald-600 hover:bg-emerald-700"
+              className="mt-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              size="lg"
             >
-              Terbitkan Surat Lulus
+              📄 Terbitkan Surat Lulus
             </Button>
           </div>
         )}
@@ -490,6 +534,8 @@ function SKUChecklist({
             const nomor = index + 1
             const item = progress[nomor]
             const isLulus = item?.status === "lulus"
+            const syaratText = getSyaratText(syarat)
+            const hasSubItems = hasSyaratSubItems(syarat)
 
             return (
               <div key={nomor} className={`p-3 border rounded-lg ${isLulus ? "border-emerald-300 bg-emerald-50" : "border-border"}`}>
@@ -502,29 +548,77 @@ function SKUChecklist({
                     {isLulus && "✓"}
                   </button>
                   <div className="flex-1">
-                    <p className={`text-sm ${isLulus ? "line-through text-muted-foreground" : ""}`}>
-                      {nomor}. {syarat}
+                    <p className={`text-sm font-medium ${isLulus ? "line-through text-muted-foreground" : ""}`}>
+                      {nomor}. {syaratText}
                     </p>
+
+                    {/* Sub-items untuk syarat keagamaan */}
+                    {hasSubItems && syarat.subItems && (
+                      <div className="mt-3 space-y-3 pl-4 border-l-2 border-amber-300">
+                        {syarat.subItems.map((subItem, subIndex) => (
+                          <div key={subIndex} className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded">
+                                {subItem.label}
+                              </span>
+                            </div>
+                            <ul className="space-y-1 text-xs text-muted-foreground">
+                              {subItem.items.map((subItemText, itemIndex) => (
+                                <li key={itemIndex} className="flex gap-2">
+                                  <span className="text-amber-600">•</span>
+                                  <span>{subItemText}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {isLulus && (
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-xs">Tanggal Uji</Label>
-                          <Input
-                            type="date"
-                            value={item?.tanggal || ""}
-                            onChange={(e) => handleDetailChange(nomor, "tanggal", e.target.value)}
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Pembina Penguji</Label>
-                          <Input
-                            type="text"
-                            placeholder="Nama pembina"
-                            value={item?.pembina || ""}
-                            onChange={(e) => handleDetailChange(nomor, "pembina", e.target.value)}
-                            className="h-8 text-xs"
-                          />
+                      <div className="mt-2 space-y-2">
+                        {/* Dropdown Agama - hanya untuk syarat dengan sub-items (keagamaan) */}
+                        {hasSubItems && syarat.subItems && (
+                          <div>
+                            <Label className="text-xs">Agama yang Diuji</Label>
+                            <Select
+                              value={item?.agama_dipilih || ""}
+                              onValueChange={(value) => handleDetailChange(nomor, "agama_dipilih", value)}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Pilih agama..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {syarat.subItems.map((subItem) => (
+                                  <SelectItem key={subItem.label} value={subItem.label}>
+                                    {subItem.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Tanggal Uji</Label>
+                            <Input
+                              type="date"
+                              value={item?.tanggal || ""}
+                              onChange={(e) => handleDetailChange(nomor, "tanggal", e.target.value)}
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Pembina Penguji</Label>
+                            <Input
+                              type="text"
+                              placeholder="Nama pembina"
+                              value={item?.pembina || ""}
+                              onChange={(e) => handleDetailChange(nomor, "pembina", e.target.value)}
+                              className="h-8 text-xs"
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -536,8 +630,14 @@ function SKUChecklist({
         </div>
 
         <Button onClick={handleSave} className="w-full mt-6" disabled={saving}>
-          {saving ? "Menyimpan..." : "Simpan Progress"}
+          {saving ? "Menyimpan..." : "💾 Simpan Progress"}
         </Button>
+
+        {lulusCount === config.jumlah_syarat && !isAllLulus && (
+          <div className="mt-3 p-3 bg-amber-100 border border-amber-300 rounded-lg text-amber-700 text-center text-sm">
+            ⚠️ Klik "Simpan Progress" untuk menyimpan data dan mengaktifkan tombol cetak surat
+          </div>
+        )}
       </div>
 
       {/* Modal Surat Lulus */}
@@ -805,18 +905,9 @@ function TKKChecklist({
     setSaving(true)
     const supabase = createClient()
 
-    // Delete existing progress
-    await supabase
-      .from("tkk_progress")
-      .delete()
-      .eq("peserta_id", peserta.id)
-
-    // Insert new progress
-    const allTKK = [...TKK_SIAGA_WAJIB, ...TKK_SIAGA_PILIHAN]
-    const inserts = Object.entries(progress)
-      .filter(([_, data]) => data.status === "lulus")
-      .map(([tkkId, data]) => {
-        const tkk = allTKK.find(t => t.id === tkkId)
+    try {
+      // Gunakan upsert untuk setiap item
+      const updates = Object.entries(progress).map(([tkkId, data]) => {
         const isWajib = TKK_SIAGA_WAJIB.some(t => t.id === tkkId)
         return {
           peserta_id: peserta.id,
@@ -828,12 +919,47 @@ function TKKChecklist({
         }
       })
 
-    if (inserts.length > 0) {
-      await supabase.from("tkk_progress").insert(inserts)
-    }
+      // Upsert satu per satu
+      for (const update of updates) {
+        const { error } = await supabase
+          .from("tkk_progress")
+          .upsert(update, {
+            onConflict: 'peserta_id,tkk_id'
+          })
 
-    setSaving(false)
-    alert("Progress TKK berhasil disimpan!")
+        if (error) {
+          console.error("Error upserting TKK item:", error, update)
+          throw error
+        }
+      }
+
+      alert("Progress TKK berhasil disimpan!")
+
+      // Refresh data setelah save
+      const { data: refreshData, error: fetchError } = await supabase
+        .from("tkk_progress")
+        .select("*")
+        .eq("peserta_id", peserta.id)
+
+      if (fetchError) {
+        console.error("Error fetching refresh data:", fetchError)
+      } else if (refreshData) {
+        const progressMap: Record<string, { status: string; tanggal: string; pembina: string }> = {}
+        refreshData.forEach((item: any) => {
+          progressMap[item.tkk_id] = {
+            status: item.status,
+            tanggal: item.tanggal_uji || "",
+            pembina: item.pembina_penguji || "",
+          }
+        })
+        setProgress(progressMap)
+      }
+    } catch (error: any) {
+      console.error("Error saving TKK progress:", error)
+      alert(`Gagal menyimpan progress TKK: ${error.message || 'Silakan coba lagi'}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const wajibLulus = TKK_SIAGA_WAJIB.filter(t => progress[t.id]?.status === "lulus").length

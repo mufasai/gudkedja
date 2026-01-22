@@ -14,6 +14,9 @@ interface PesertaRecord {
   id: number
   created_at: string
   nama_lengkap: string
+  tempat_lahir: string
+  tanggal_lahir: string
+  usia?: number
   golongan: string
   kelas: string
   tahun_masuk: number
@@ -33,10 +36,13 @@ export default function DataPesertaPage() {
   const [success, setSuccess] = useState(false)
   const [searchNama, setSearchNama] = useState("")
   const [filterGolongan, setFilterGolongan] = useState("Semua")
+  const [filterTahun, setFilterTahun] = useState("Semua")
   const [editingId, setEditingId] = useState<number | null>(null)
 
   const [formData, setFormData] = useState({
     nama_lengkap: "",
+    tempat_lahir: "",
+    tanggal_lahir: "",
     golongan: "",
     kelas: "",
     tahun_masuk: new Date().getFullYear(),
@@ -45,6 +51,19 @@ export default function DataPesertaPage() {
     barung: "",
     regu: "",
   })
+
+  // Calculate age from birth date
+  const calculateAge = (birthDate: string): number => {
+    if (!birthDate) return 0
+    const today = new Date()
+    const birth = new Date(birthDate)
+    let age = today.getFullYear() - birth.getFullYear()
+    const monthDiff = today.getMonth() - birth.getMonth()
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--
+    }
+    return age
+  }
 
   useEffect(() => {
     const checkAuthAndFetch = async () => {
@@ -91,6 +110,8 @@ export default function DataPesertaPage() {
       setSuccess(true)
       setFormData({
         nama_lengkap: "",
+        tempat_lahir: "",
+        tanggal_lahir: "",
         golongan: "",
         kelas: "",
         tahun_masuk: new Date().getFullYear(),
@@ -120,6 +141,19 @@ export default function DataPesertaPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
+
+    // Auto clear barung/regu based on golongan selection
+    if (name === "golongan") {
+      if (value === "Siaga") {
+        setFormData((prev) => ({ ...prev, golongan: value, regu: "" }))
+      } else if (value === "Penggalang") {
+        setFormData((prev) => ({ ...prev, golongan: value, barung: "" }))
+      } else {
+        setFormData((prev) => ({ ...prev, golongan: value, barung: "", regu: "" }))
+      }
+      return
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: name === "tahun_masuk" ? Number.parseInt(value) : value,
@@ -129,6 +163,8 @@ export default function DataPesertaPage() {
   const handleEdit = (peserta: PesertaRecord) => {
     setFormData({
       nama_lengkap: peserta.nama_lengkap,
+      tempat_lahir: peserta.tempat_lahir || "",
+      tanggal_lahir: peserta.tanggal_lahir || "",
       golongan: peserta.golongan,
       kelas: peserta.kelas,
       tahun_masuk: peserta.tahun_masuk,
@@ -159,8 +195,12 @@ export default function DataPesertaPage() {
   const filteredData = pesertaData.filter((peserta) => {
     const matchNama = peserta.nama_lengkap.toLowerCase().includes(searchNama.toLowerCase())
     const matchGolongan = filterGolongan === "Semua" || peserta.golongan === filterGolongan
-    return matchNama && matchGolongan
+    const matchTahun = filterTahun === "Semua" || peserta.tahun_masuk.toString() === filterTahun
+    return matchNama && matchGolongan && matchTahun
   })
+
+  // Get unique years for filter
+  const availableYears = Array.from(new Set(pesertaData.map(p => p.tahun_masuk))).sort((a, b) => b - a)
 
   if (loading) {
     return (
@@ -200,7 +240,7 @@ export default function DataPesertaPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="nama_lengkap" className="text-sm font-medium">
-                    Nama Lengkap
+                    Nama Lengkap *
                   </Label>
                   <Input
                     id="nama_lengkap"
@@ -213,6 +253,42 @@ export default function DataPesertaPage() {
                     className="mt-1"
                   />
                 </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="tempat_lahir" className="text-sm font-medium">
+                      Tempat Lahir
+                    </Label>
+                    <Input
+                      id="tempat_lahir"
+                      name="tempat_lahir"
+                      type="text"
+                      placeholder="Kota"
+                      value={formData.tempat_lahir}
+                      onChange={handleChange}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="tanggal_lahir" className="text-sm font-medium">
+                      Tanggal Lahir
+                    </Label>
+                    <Input
+                      id="tanggal_lahir"
+                      name="tanggal_lahir"
+                      type="date"
+                      value={formData.tanggal_lahir}
+                      onChange={handleChange}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+
+                {formData.tanggal_lahir && (
+                  <div className="text-xs text-muted-foreground bg-secondary p-2 rounded">
+                    Usia: {calculateAge(formData.tanggal_lahir)} tahun
+                  </div>
+                )}
 
                 <div>
                   <Label htmlFor="no_induk" className="text-sm font-medium">
@@ -231,7 +307,7 @@ export default function DataPesertaPage() {
 
                 <div>
                   <Label htmlFor="golongan" className="text-sm font-medium">
-                    Golongan
+                    Golongan *
                   </Label>
                   <select
                     id="golongan"
@@ -244,10 +320,44 @@ export default function DataPesertaPage() {
                     <option value="">-- Pilih Golongan --</option>
                     <option value="Siaga">Siaga</option>
                     <option value="Penggalang">Penggalang</option>
-                    <option value="Penegak">Penegak</option>
-                    <option value="Pandega">Pandega</option>
                   </select>
                 </div>
+
+                {/* Conditional: Show Barung only for Siaga */}
+                {formData.golongan === "Siaga" && (
+                  <div>
+                    <Label htmlFor="barung" className="text-sm font-medium">
+                      Nama Barung
+                    </Label>
+                    <Input
+                      id="barung"
+                      name="barung"
+                      type="text"
+                      placeholder="Contoh: Merah"
+                      value={formData.barung}
+                      onChange={handleChange}
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+
+                {/* Conditional: Show Regu only for Penggalang */}
+                {formData.golongan === "Penggalang" && (
+                  <div>
+                    <Label htmlFor="regu" className="text-sm font-medium">
+                      Nama Regu
+                    </Label>
+                    <Input
+                      id="regu"
+                      name="regu"
+                      type="text"
+                      placeholder="Contoh: Garuda"
+                      value={formData.regu}
+                      onChange={handleChange}
+                      className="mt-1"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <Label htmlFor="kelas" className="text-sm font-medium">
@@ -259,36 +369,6 @@ export default function DataPesertaPage() {
                     type="text"
                     placeholder="Contoh: Kelas 1"
                     value={formData.kelas}
-                    onChange={handleChange}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="barung" className="text-sm font-medium">
-                    Barung (Siaga)
-                  </Label>
-                  <Input
-                    id="barung"
-                    name="barung"
-                    type="text"
-                    placeholder="Contoh: Merah"
-                    value={formData.barung}
-                    onChange={handleChange}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="regu" className="text-sm font-medium">
-                    Regu (Penggalang)
-                  </Label>
-                  <Input
-                    id="regu"
-                    name="regu"
-                    type="text"
-                    placeholder="Contoh: Garuda"
-                    value={formData.regu}
                     onChange={handleChange}
                     className="mt-1"
                   />
@@ -348,6 +428,8 @@ export default function DataPesertaPage() {
                         setEditingId(null)
                         setFormData({
                           nama_lengkap: "",
+                          tempat_lahir: "",
+                          tanggal_lahir: "",
                           golongan: "",
                           kelas: "",
                           tahun_masuk: new Date().getFullYear(),
@@ -384,22 +466,38 @@ export default function DataPesertaPage() {
                   className="mt-1"
                 />
               </div>
-              <div>
-                <Label htmlFor="filter" className="text-sm font-medium">
-                  Filter Golongan
-                </Label>
-                <select
-                  id="filter"
-                  value={filterGolongan}
-                  onChange={(e) => setFilterGolongan(e.target.value)}
-                  className="w-full mt-1 px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm"
-                >
-                  <option value="Semua">Semua Golongan</option>
-                  <option value="Siaga">Siaga</option>
-                  <option value="Penggalang">Penggalang</option>
-                  <option value="Penegak">Penegak</option>
-                  <option value="Pandega">Pandega</option>
-                </select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="filter" className="text-sm font-medium">
+                    Filter Golongan
+                  </Label>
+                  <select
+                    id="filter"
+                    value={filterGolongan}
+                    onChange={(e) => setFilterGolongan(e.target.value)}
+                    className="w-full mt-1 px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm"
+                  >
+                    <option value="Semua">Semua Golongan</option>
+                    <option value="Siaga">Siaga</option>
+                    <option value="Penggalang">Penggalang</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="filterTahun" className="text-sm font-medium">
+                    Filter Tahun
+                  </Label>
+                  <select
+                    id="filterTahun"
+                    value={filterTahun}
+                    onChange={(e) => setFilterTahun(e.target.value)}
+                    className="w-full mt-1 px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm"
+                  >
+                    <option value="Semua">Semua Tahun</option>
+                    {availableYears.map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -410,35 +508,42 @@ export default function DataPesertaPage() {
                   <p>Tidak ada data peserta</p>
                 </div>
               ) : (
-                filteredData.map((peserta) => (
-                  <div key={peserta.id} className="bg-card rounded-lg p-4 shadow hover:shadow-md transition">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h3 className="font-bold text-card-foreground">{peserta.nama_lengkap}</h3>
-                        <p className="text-sm text-muted-foreground">{peserta.golongan}</p>
+                filteredData.map((peserta) => {
+                  const usia = peserta.tanggal_lahir ? calculateAge(peserta.tanggal_lahir) : null
+                  return (
+                    <div key={peserta.id} className="bg-card rounded-lg p-4 shadow hover:shadow-md transition">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h3 className="font-bold text-card-foreground">{peserta.nama_lengkap}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {peserta.golongan} {peserta.golongan === "Siaga" && peserta.barung ? `- Barung ${peserta.barung}` : ""}
+                            {peserta.golongan === "Penggalang" && peserta.regu ? `- Regu ${peserta.regu}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => handleEdit(peserta)} className="text-xs">
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(peserta.id)}
+                            className="text-xs text-destructive hover:bg-destructive/10"
+                          >
+                            Hapus
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => handleEdit(peserta)} className="text-xs">
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDelete(peserta.id)}
-                          className="text-xs text-destructive hover:bg-destructive/10"
-                        >
-                          Hapus
-                        </Button>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <div>No. Induk: {peserta.no_induk || "-"}</div>
+                        <div>Kelas: {peserta.kelas || "-"}</div>
+                        <div>TTL: {peserta.tempat_lahir || "-"}, {peserta.tanggal_lahir ? new Date(peserta.tanggal_lahir).toLocaleDateString('id-ID') : "-"}</div>
+                        <div>Usia: {usia ? `${usia} tahun` : "-"}</div>
+                        <div>Tahun Masuk: {peserta.tahun_masuk}</div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                      <div>No. Induk: {peserta.no_induk || "-"}</div>
-                      <div>Kelas: {peserta.kelas || "-"}</div>
-                      <div>Tahun: {peserta.tahun_masuk}</div>
-                      <div>Barung/Regu: {peserta.barung || peserta.regu || "-"}</div>
-                    </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>

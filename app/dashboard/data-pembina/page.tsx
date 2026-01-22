@@ -21,12 +21,12 @@ interface PembinaRecord {
   alamat: string
   file_sk: string | null
   file_kta: string | null
-  file_ijazah_kursus: string | null
+  file_ijazah_kursus: string[] | null // Changed to array
   foto_pelantikan: string[] | null
   berkas_lain: string[] | null
 }
 
-const JABATAN_OPTIONS = ["Mabigus", "Pembina"]
+const JABATAN_OPTIONS = ["Mabigus", "Pembina Siaga", "Pembina Penggalang"]
 const KURSUS_OPTIONS = ["Belum", "KMD", "KML", "KPD", "KPL"]
 
 export default function DataPembinaPage() {
@@ -54,7 +54,7 @@ export default function DataPembinaPage() {
   // File states
   const [fileSK, setFileSK] = useState<File | null>(null)
   const [fileKTA, setFileKTA] = useState<File | null>(null)
-  const [fileIjazah, setFileIjazah] = useState<File | null>(null)
+  const [fileIjazah, setFileIjazah] = useState<File[]>([]) // Changed to array, max 4
   const [fotoPelantikan, setFotoPelantikan] = useState<File[]>([])
   const [berkasLain, setBerkasLain] = useState<File[]>([])
   const [uploading, setUploading] = useState(false)
@@ -83,24 +83,32 @@ export default function DataPembinaPage() {
   }, [router])
 
   const uploadFile = async (file: File, folder: string): Promise<string | null> => {
-    const supabase = createClient()
-    const fileExt = file.name.split(".").pop()
-    const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+    try {
+      const supabase = createClient()
+      const fileExt = file.name.split(".").pop()
+      const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
 
-    const { data, error } = await supabase.storage
-      .from("pembina-files")
-      .upload(fileName, file)
+      console.log("Uploading file:", fileName)
 
-    if (error) {
-      console.error("Upload error:", error)
-      return null
+      const { data, error } = await supabase.storage
+        .from("pembina-files")
+        .upload(fileName, file)
+
+      if (error) {
+        console.error("Upload error:", error)
+        throw new Error(`Gagal upload ${file.name}: ${error.message}`)
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("pembina-files")
+        .getPublicUrl(fileName)
+
+      console.log("Upload success:", urlData.publicUrl)
+      return urlData.publicUrl
+    } catch (error) {
+      console.error("Upload file error:", error)
+      throw error
     }
-
-    const { data: urlData } = supabase.storage
-      .from("pembina-files")
-      .getPublicUrl(fileName)
-
-    return urlData.publicUrl
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,41 +121,57 @@ export default function DataPembinaPage() {
     try {
       const supabase = createClient()
 
+      console.log("Starting upload process...")
+
       // Upload files
       let skUrl = null
       let ktaUrl = null
-      let ijazahUrl = null
+      let ijazahUrls: string[] = []
       let pelantikanUrls: string[] = []
       let berkasUrls: string[] = []
 
       if (fileSK) {
+        console.log("Uploading SK...")
         skUrl = await uploadFile(fileSK, "sk")
       }
       if (fileKTA) {
+        console.log("Uploading KTA...")
         ktaUrl = await uploadFile(fileKTA, "kta")
       }
-      if (fileIjazah) {
-        ijazahUrl = await uploadFile(fileIjazah, "ijazah")
+      if (fileIjazah.length > 0) {
+        console.log(`Uploading ${fileIjazah.length} ijazah files...`)
+        for (const ijazah of fileIjazah) {
+          const url = await uploadFile(ijazah, "ijazah")
+          if (url) ijazahUrls.push(url)
+        }
       }
       if (fotoPelantikan.length > 0) {
+        console.log(`Uploading ${fotoPelantikan.length} foto pelantikan...`)
         for (const foto of fotoPelantikan) {
           const url = await uploadFile(foto, "pelantikan")
           if (url) pelantikanUrls.push(url)
         }
       }
       if (berkasLain.length > 0) {
+        console.log(`Uploading ${berkasLain.length} berkas lain...`)
         for (const berkas of berkasLain) {
           const url = await uploadFile(berkas, "berkas")
           if (url) berkasUrls.push(url)
         }
       }
 
+      console.log("All files uploaded, saving to database...")
+
       const dataToSave: any = { ...formData }
+      // Tambahkan posisi dengan nilai yang sama dengan jabatan untuk backward compatibility
+      dataToSave.posisi = formData.jabatan
       if (skUrl) dataToSave.file_sk = skUrl
       if (ktaUrl) dataToSave.file_kta = ktaUrl
-      if (ijazahUrl) dataToSave.file_ijazah_kursus = ijazahUrl
+      if (ijazahUrls.length > 0) dataToSave.file_ijazah_kursus = ijazahUrls
       if (pelantikanUrls.length > 0) dataToSave.foto_pelantikan = pelantikanUrls
       if (berkasUrls.length > 0) dataToSave.berkas_lain = berkasUrls
+
+      console.log("Data to save:", dataToSave)
 
       if (editingId) {
         const { error: updateError } = await supabase
@@ -155,14 +179,22 @@ export default function DataPembinaPage() {
           .update(dataToSave)
           .eq("id", editingId)
 
-        if (updateError) throw updateError
+        if (updateError) {
+          console.error("Update error:", updateError)
+          throw updateError
+        }
       } else {
         const { error: insertError } = await supabase
           .from("data_pembina")
           .insert([dataToSave])
 
-        if (insertError) throw insertError
+        if (insertError) {
+          console.error("Insert error:", insertError)
+          throw insertError
+        }
       }
+
+      console.log("Data saved successfully!")
 
       setSuccess(true)
       resetForm()
@@ -178,8 +210,10 @@ export default function DataPembinaPage() {
       }
 
       setTimeout(() => setSuccess(false), 3000)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal menyimpan data")
+    } catch (err: any) {
+      console.error("Submit error:", err)
+      const errorMessage = err?.message || "Gagal menyimpan data"
+      setError(errorMessage)
     } finally {
       setSubmitting(false)
       setUploading(false)
@@ -198,7 +232,7 @@ export default function DataPembinaPage() {
     })
     setFileSK(null)
     setFileKTA(null)
-    setFileIjazah(null)
+    setFileIjazah([]) // Changed to empty array
     setFotoPelantikan([])
     setBerkasLain([])
     setEditingId(null)
@@ -310,14 +344,15 @@ export default function DataPembinaPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="file_sk">Upload SK Jabatan</Label>
+                  <Label htmlFor="file_sk">Upload SK Jabatan (PDF)</Label>
                   <Input
                     id="file_sk"
                     type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept=".pdf"
                     onChange={(e) => setFileSK(e.target.files?.[0] || null)}
                     className="mt-1"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">Format: PDF</p>
                 </div>
 
                 <div>
@@ -333,14 +368,15 @@ export default function DataPembinaPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="file_kta">Upload KTA</Label>
+                  <Label htmlFor="file_kta">Upload KTA (PDF)</Label>
                   <Input
                     id="file_kta"
                     type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept=".pdf"
                     onChange={(e) => setFileKTA(e.target.files?.[0] || null)}
                     className="mt-1"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">Format: PDF</p>
                 </div>
 
                 <div>
@@ -359,18 +395,26 @@ export default function DataPembinaPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="file_ijazah">Upload Ijazah Kursus</Label>
+                  <Label htmlFor="file_ijazah">Upload Ijazah Kursus (PDF, max 4)</Label>
                   <Input
                     id="file_ijazah"
                     type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => setFileIjazah(e.target.files?.[0] || null)}
+                    accept=".pdf"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []).slice(0, 4)
+                      setFileIjazah(files)
+                    }}
                     className="mt-1"
                   />
+                  {fileIjazah.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">{fileIjazah.length} file dipilih (max 4)</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">Format: PDF, maksimal 4 file</p>
                 </div>
 
                 <div>
-                  <Label htmlFor="foto_pelantikan">Foto Pelantikan (max 5)</Label>
+                  <Label htmlFor="foto_pelantikan">Foto Pelantikan (JPEG/JPG/PNG, max 5)</Label>
                   <Input
                     id="foto_pelantikan"
                     type="file"
@@ -383,23 +427,28 @@ export default function DataPembinaPage() {
                     className="mt-1"
                   />
                   {fotoPelantikan.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">{fotoPelantikan.length} file dipilih</p>
+                    <p className="text-xs text-muted-foreground mt-1">{fotoPelantikan.length} file dipilih (max 5)</p>
                   )}
+                  <p className="text-xs text-muted-foreground mt-1">Format: JPEG/JPG/PNG, maksimal 5 file</p>
                 </div>
 
                 <div>
-                  <Label htmlFor="berkas_lain">Berkas Lain (Narakarya, SHB, THB, dll)</Label>
+                  <Label htmlFor="berkas_lain">Berkas Lain (PDF, max 5)</Label>
                   <Input
                     id="berkas_lain"
                     type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
+                    accept=".pdf"
                     multiple
-                    onChange={(e) => setBerkasLain(Array.from(e.target.files || []))}
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []).slice(0, 5)
+                      setBerkasLain(files)
+                    }}
                     className="mt-1"
                   />
                   {berkasLain.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">{berkasLain.length} file dipilih</p>
+                    <p className="text-xs text-muted-foreground mt-1">{berkasLain.length} file dipilih (max 5)</p>
                   )}
+                  <p className="text-xs text-muted-foreground mt-1">Format: PDF (Narakarya, SHB, THB, dll), maksimal 5 file</p>
                 </div>
 
                 <div>
@@ -410,18 +459,6 @@ export default function DataPembinaPage() {
                     value={formData.no_telepon}
                     onChange={handleChange}
                     placeholder="08xxxxxxxxxx"
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleChange}
                     className="mt-1"
                   />
                 </div>
@@ -577,10 +614,10 @@ function PembinaDetail({
             <span className="text-muted-foreground">Kursus:</span>
             <p className="font-medium">
               <span className={`px-2 py-1 rounded text-xs ${pembina.kursus === "KPL" ? "bg-emerald-100 text-emerald-700" :
-                  pembina.kursus === "KPD" ? "bg-blue-100 text-blue-700" :
-                    pembina.kursus === "KML" ? "bg-purple-100 text-purple-700" :
-                      pembina.kursus === "KMD" ? "bg-amber-100 text-amber-700" :
-                        "bg-gray-100 text-gray-700"
+                pembina.kursus === "KPD" ? "bg-blue-100 text-blue-700" :
+                  pembina.kursus === "KML" ? "bg-purple-100 text-purple-700" :
+                    pembina.kursus === "KMD" ? "bg-amber-100 text-amber-700" :
+                      "bg-gray-100 text-gray-700"
                 }`}>
                 {pembina.kursus || "Belum"}
               </span>
@@ -589,10 +626,6 @@ function PembinaDetail({
           <div>
             <span className="text-muted-foreground">No. Telepon:</span>
             <p className="font-medium">{pembina.no_telepon || "-"}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Email:</span>
-            <p className="font-medium">{pembina.email || "-"}</p>
           </div>
           <div className="col-span-2">
             <span className="text-muted-foreground">Alamat:</span>
@@ -604,15 +637,54 @@ function PembinaDetail({
       {/* Dokumen */}
       <div className="bg-card rounded-lg shadow-lg p-6">
         <h3 className="font-bold mb-4">Dokumen</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FileCard label="SK Jabatan" url={pembina.file_sk} />
           <FileCard label="KTA" url={pembina.file_kta} />
-          <FileCard label="Ijazah Kursus" url={pembina.file_ijazah_kursus} />
         </div>
       </div>
 
+      {/* Ijazah Kursus */}
+      {(() => {
+        // Handle different data formats
+        let ijazahArray: string[] = []
+        if (Array.isArray(pembina.file_ijazah_kursus)) {
+          ijazahArray = pembina.file_ijazah_kursus
+        } else if (typeof pembina.file_ijazah_kursus === 'string' && pembina.file_ijazah_kursus) {
+          // If it's a string, try to parse as JSON or treat as single URL
+          try {
+            const parsed = JSON.parse(pembina.file_ijazah_kursus)
+            ijazahArray = Array.isArray(parsed) ? parsed : [pembina.file_ijazah_kursus]
+          } catch {
+            ijazahArray = [pembina.file_ijazah_kursus]
+          }
+        }
+
+        if (ijazahArray.length === 0) return null
+
+        return (
+          <div className="bg-card rounded-lg shadow-lg p-6">
+            <h3 className="font-bold mb-4">Ijazah Kursus ({ijazahArray.length})</h3>
+            <div className="space-y-2">
+              {ijazahArray.map((url, index) => (
+                <a
+                  key={index}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 p-3 border border-border rounded-lg hover:bg-secondary transition"
+                >
+                  <span className="text-xl">📄</span>
+                  <span className="text-sm">Ijazah Kursus {index + 1}</span>
+                  <span className="text-xs text-muted-foreground ml-auto">Lihat PDF →</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Foto Pelantikan */}
-      {pembina.foto_pelantikan && pembina.foto_pelantikan.length > 0 && (
+      {Array.isArray(pembina.foto_pelantikan) && pembina.foto_pelantikan.length > 0 && (
         <div className="bg-card rounded-lg shadow-lg p-6">
           <h3 className="font-bold mb-4">Foto Pelantikan ({pembina.foto_pelantikan.length})</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
@@ -632,7 +704,7 @@ function PembinaDetail({
       )}
 
       {/* Berkas Lain */}
-      {pembina.berkas_lain && pembina.berkas_lain.length > 0 && (
+      {Array.isArray(pembina.berkas_lain) && pembina.berkas_lain.length > 0 && (
         <div className="bg-card rounded-lg shadow-lg p-6">
           <h3 className="font-bold mb-4">Berkas Lain ({pembina.berkas_lain.length})</h3>
           <div className="space-y-2">
@@ -646,7 +718,7 @@ function PembinaDetail({
               >
                 <span className="text-xl">📄</span>
                 <span className="text-sm">Berkas {index + 1}</span>
-                <span className="text-xs text-muted-foreground ml-auto">Lihat →</span>
+                <span className="text-xs text-muted-foreground ml-auto">Lihat PDF →</span>
               </a>
             ))}
           </div>

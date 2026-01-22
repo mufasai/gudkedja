@@ -104,7 +104,41 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+
+/* Print Styles */
+@media print {
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:bg-white {
+    background-color: white !important;
+  }
+
+  body {
+    background-color: white !important;
+  }
+
+  /* Hide all buttons when printing */
+  button {
+    display: none !important;
+  }
+
+  /* Optimize page breaks */
+  .bg-card {
+    page-break-inside: avoid;
+  }
+
+  /* Remove shadows for cleaner print */
+  .shadow,
+  .shadow-lg,
+  .shadow-md {
+    box-shadow: none !important;
   }
 }
