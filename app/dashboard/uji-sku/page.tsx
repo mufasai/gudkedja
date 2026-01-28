@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
 import { SKU_CONFIG, type JenisSKU, TKK_SIAGA_WAJIB, TKK_SIAGA_PILIHAN, type TKKItem, type SyaratSKU, getSyaratText, hasSyaratSubItems } from "@/lib/sku-data"
+import { formatTanggal, getNamaHari, extractKodeGudep, generateSuratHTML } from "@/lib/surat-template"
 
 interface PesertaRecord {
   id: number
@@ -664,82 +665,96 @@ function SuratLulusModal({
   onClose: () => void
 }) {
   const config = SKU_CONFIG[jenisSKU]
-  const [tempat, setTempat] = useState("Sokaraja")
-  const [tanggal, setTanggal] = useState(new Date().toISOString().split("T")[0])
-  const [namaPembina, setNamaPembina] = useState("")
+  const [nomorSurat, setNomorSurat] = useState("021/11.02.06.0365/XII/2023")
+  const [tempatLahir, setTempatLahir] = useState("")
+  const [tanggalLahir, setTanggalLahir] = useState("")
+  const [tanggalPelantikan, setTanggalPelantikan] = useState("")
+  const [tempatTerbit, setTempatTerbit] = useState("Kedondong")
+  const [tanggalTerbit, setTanggalTerbit] = useState(new Date().toISOString().split("T")[0])
+  const [namaPembina, setNamaPembina] = useState("Ridar Pamungkas,S.Pd.SD")
+  const [nipPembina, setNipPembina] = useState("19820603692474")
   const [saving, setSaving] = useState(false)
+
+  // Fetch data peserta untuk TTL
+  useEffect(() => {
+    const fetchPesertaDetail = async () => {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from("data_peserta_didik")
+        .select("tempat_lahir, tanggal_lahir")
+        .eq("id", peserta.id)
+        .single()
+
+      if (data) {
+        setTempatLahir(data.tempat_lahir || "")
+        setTanggalLahir(data.tanggal_lahir || "")
+      }
+    }
+    fetchPesertaDetail()
+  }, [peserta.id])
 
   const handleCetakPDF = async () => {
     setSaving(true)
 
-    // Save to database
-    const supabase = createClient()
-    await supabase.from("surat_lulus_sku").upsert({
-      peserta_id: peserta.id,
-      jenis_sku: jenisSKU,
-      tempat_terbit: tempat,
-      tanggal_terbit: tanggal,
-      nama_pembina: namaPembina,
+    try {
+      // Save to database
+      const supabase = createClient()
+      const { error: saveError } = await supabase.from("surat_lulus_sku").upsert({
+        peserta_id: peserta.id,
+        jenis_sku: jenisSKU,
+        nomor_surat: nomorSurat || null,
+        tempat_lahir: tempatLahir || null,
+        tanggal_lahir: tanggalLahir || null,
+        tanggal_pelantikan: tanggalPelantikan || null,
+        tempat_terbit: tempatTerbit || null,
+        tanggal_terbit: tanggalTerbit || null,
+        nama_pembina: namaPembina || null,
+        nip_pembina: nipPembina || null,
+      }, {
+        onConflict: 'peserta_id,jenis_sku'
+      })
+
+      if (saveError) {
+        alert("Gagal menyimpan data. Silakan coba lagi.")
+        setSaving(false)
+        return
+      }
+    } catch (err) {
+      alert("Terjadi kesalahan saat menyimpan data.")
+      setSaving(false)
+      return
+    }
+
+    // Generate HTML menggunakan template
+    const printContent = generateSuratHTML({
+      kodeGudep: extractKodeGudep(nomorSurat),
+      nomorSurat,
+      namaPeserta: peserta.nama_lengkap,
+      tempatLahir,
+      tanggalLahir,
+      golongan: peserta.golongan,
+      tingkatSKU: config.nama.split(' ').pop() || config.nama,
+      namaHariPelantikan: getNamaHari(tanggalPelantikan),
+      tanggalPelantikan,
+      tempatTerbit,
+      tanggalTerbit,
+      namaPembina,
+      nipPembina,
     })
 
-    // Generate PDF (simple print version)
-    const printContent = `
-      <html>
-        <head>
-          <title>Surat Pernyataan Lulus ${config.nama}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 30px; }
-            .title { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
-            .subtitle { font-size: 14px; }
-            .content { line-height: 1.8; margin: 30px 0; }
-            .data-table { width: 100%; margin: 20px 0; }
-            .data-table td { padding: 5px 10px; }
-            .data-table td:first-child { width: 150px; }
-            .signature { margin-top: 50px; text-align: right; }
-            .signature-box { display: inline-block; text-align: center; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="title">SURAT PERNYATAAN</div>
-            <div class="title">LULUS ${config.nama.toUpperCase()}</div>
-            <div class="subtitle">Gugus Depan SD Kedondong Sokaraja</div>
-          </div>
-          
-          <div class="content">
-            <p>Yang bertanda tangan di bawah ini, Pembina Gugus Depan SD Kedondong Sokaraja, menyatakan bahwa:</p>
-            
-            <table class="data-table">
-              <tr><td>Nama</td><td>: ${peserta.nama_lengkap}</td></tr>
-              <tr><td>Golongan</td><td>: ${peserta.golongan}</td></tr>
-              <tr><td>Tingkat</td><td>: ${config.nama}</td></tr>
-              <tr><td>Kelas</td><td>: ${peserta.kelas}</td></tr>
-              <tr><td>Gugus Depan</td><td>: SD Kedondong Sokaraja</td></tr>
-            </table>
-            
-            <p>Telah menyelesaikan seluruh syarat-syarat kecakapan umum dan dinyatakan <strong>LULUS</strong> ${config.nama}.</p>
-            
-            <p>Demikian surat pernyataan ini dibuat untuk dapat dipergunakan sebagaimana mestinya.</p>
-          </div>
-          
-          <div class="signature">
-            <div class="signature-box">
-              <p>${tempat}, ${new Date(tanggal).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
-              <p>Pembina Gudep</p>
-              <br><br><br>
-              <p><strong>${namaPembina || "____________________"}</strong></p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `
-
-    const printWindow = window.open("", "_blank")
+    // Open print window
+    const printWindow = window.open('', '_blank')
     if (printWindow) {
       printWindow.document.write(printContent)
       printWindow.document.close()
-      printWindow.print()
+
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print()
+        }, 500)
+      }
+    } else {
+      alert("Pop-up diblokir. Silakan izinkan pop-up untuk aplikasi ini.")
     }
 
     setSaving(false)
@@ -747,41 +762,94 @@ function SuratLulusModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-lg shadow-xl p-6 w-full max-w-md">
-        <h2 className="text-lg font-bold mb-4">Terbitkan Surat Lulus SKU</h2>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-card rounded-lg shadow-xl p-6 w-full max-w-md my-8">
+        <h2 className="text-lg font-bold mb-4">Terbitkan Surat Keterangan Lulus</h2>
 
-        <div className="space-y-4">
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
           <div>
-            <Label>Nama</Label>
-            <Input value={peserta.nama_lengkap} disabled className="bg-secondary" />
-          </div>
-          <div>
-            <Label>Golongan</Label>
-            <Input value={peserta.golongan} disabled className="bg-secondary" />
-          </div>
-          <div>
-            <Label>Tingkat</Label>
-            <Input value={config.nama} disabled className="bg-secondary" />
-          </div>
-          <div>
-            <Label>Gugus Depan</Label>
-            <Input value="SD Kedondong Sokaraja" disabled className="bg-secondary" />
-          </div>
-          <div>
-            <Label>Tempat</Label>
-            <Input value={tempat} onChange={(e) => setTempat(e.target.value)} />
-          </div>
-          <div>
-            <Label>Tanggal</Label>
-            <Input type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
-          </div>
-          <div>
-            <Label>Nama Pembina</Label>
+            <Label className="text-sm">Nomor Surat</Label>
             <Input
-              placeholder="Nama pembina yang menandatangani"
+              value={nomorSurat}
+              onChange={(e) => setNomorSurat(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-sm">Nama</Label>
+            <Input value={peserta.nama_lengkap} disabled className="bg-secondary text-sm" />
+          </div>
+          <div>
+            <Label className="text-sm">Tempat Lahir</Label>
+            <Input
+              value={tempatLahir}
+              onChange={(e) => setTempatLahir(e.target.value)}
+              placeholder="Contoh: Banyumas"
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-sm">Tanggal Lahir</Label>
+            <Input
+              type="date"
+              value={tanggalLahir}
+              onChange={(e) => setTanggalLahir(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-sm">Golongan</Label>
+            <Input value={peserta.golongan} disabled className="bg-secondary text-sm" />
+          </div>
+          <div>
+            <Label className="text-sm">Tingkat SKU</Label>
+            <Input value={config.nama} disabled className="bg-secondary text-sm" />
+          </div>
+          <div>
+            <Label className="text-sm">Tanggal Pelantikan</Label>
+            <Input
+              type="date"
+              value={tanggalPelantikan}
+              onChange={(e) => setTanggalPelantikan(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+          <div className="border-t pt-3 mt-3">
+            <Label className="text-sm font-bold">Data Penerbitan</Label>
+          </div>
+          <div>
+            <Label className="text-sm">Tempat Terbit</Label>
+            <Input
+              value={tempatTerbit}
+              onChange={(e) => setTempatTerbit(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-sm">Tanggal Terbit</Label>
+            <Input
+              type="date"
+              value={tanggalTerbit}
+              onChange={(e) => setTanggalTerbit(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-sm">Nama Ketua Gudep</Label>
+            <Input
               value={namaPembina}
               onChange={(e) => setNamaPembina(e.target.value)}
+              placeholder="Nama pembina yang menandatangani"
+              className="text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-sm">NTa</Label>
+            <Input
+              value={nipPembina}
+              onChange={(e) => setNipPembina(e.target.value)}
+              placeholder="NIP pembina"
+              className="text-sm"
             />
           </div>
         </div>
@@ -791,7 +859,7 @@ function SuratLulusModal({
             Batal
           </Button>
           <Button onClick={handleCetakPDF} className="flex-1" disabled={saving}>
-            {saving ? "Memproses..." : "Cetak PDF"}
+            {saving ? "Memproses..." : "📄 Cetak PDF"}
           </Button>
         </div>
       </div>
@@ -956,7 +1024,7 @@ function TKKChecklist({
       }
     } catch (error: any) {
       console.error("Error saving TKK progress:", error)
-      alert(`Gagal menyimpan progress TKK: ${error.message || 'Silakan coba lagi'}`)
+      alert(`Gagal menyimpan progress TKK: ${error.message || 'Silakan coba lagi'} `)
     } finally {
       setSaving(false)
     }
@@ -1074,19 +1142,19 @@ function TKKItem({
   const isLulus = progress?.status === "lulus"
 
   return (
-    <div className={`p-3 border rounded-lg ${isLulus ? "border-emerald-300 bg-emerald-50" : "border-border"}`}>
+    <div className={`p - 3 border rounded - lg ${isLulus ? "border-emerald-300 bg-emerald-50" : "border-border"} `}>
       <div className="flex items-start gap-3">
         <button
           onClick={onToggle}
-          className={`mt-1 w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 ${isLulus ? "bg-emerald-500 border-emerald-500 text-white" : "border-gray-300"
-            }`}
+          className={`mt - 1 w - 6 h - 6 rounded border - 2 flex items - center justify - center flex - shrink - 0 ${isLulus ? "bg-emerald-500 border-emerald-500 text-white" : "border-gray-300"
+            } `}
         >
           {isLulus && "✓"}
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <span className="text-xl">{tkk.icon}</span>
-            <span className={`font-medium ${isLulus ? "text-emerald-700" : ""}`}>{tkk.nama}</span>
+            <span className={`font - medium ${isLulus ? "text-emerald-700" : ""} `}>{tkk.nama}</span>
           </div>
           {isLulus && (
             <div className="mt-2 space-y-2">
@@ -1161,7 +1229,7 @@ function PiagamTKKModal({
 
     // Generate PDF
     const printContent = `
-      <html>
+    < html >
         <head>
           <title>Piagam TKK ${tkk.nama}</title>
           <style>
@@ -1225,7 +1293,7 @@ function PiagamTKKModal({
             </div>
           </div>
         </body>
-      </html>
+      </html >
     `
 
     const printWindow = window.open("", "_blank")
