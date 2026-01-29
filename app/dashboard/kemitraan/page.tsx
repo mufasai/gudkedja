@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import { compressImages, validatePDFSize } from "@/lib/image-compression"
 
 interface KemitraanRecord {
   id: number
@@ -52,6 +53,7 @@ export default function KemitraanPage() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [selectedKemitraan, setSelectedKemitraan] = useState<KemitraanRecord | null>(null)
 
@@ -323,33 +325,33 @@ export default function KemitraanPage() {
         </div>
 
         <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
-          <div className="bg-card rounded-lg shadow-lg p-6">
+          <div className="bg-card rounded-lg shadow-lg p-4 sm:p-6">
             <h3 className="font-bold text-lg mb-4">Informasi Kemitraan</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div>
-                <span className="text-muted-foreground text-sm">Nama Mitra:</span>
-                <p className="font-medium">{selectedKemitraan.nama_mitra}</p>
+                <span className="text-muted-foreground text-sm block mb-1">Nama Mitra:</span>
+                <p className="font-medium break-words">{selectedKemitraan.nama_mitra}</p>
               </div>
               <div>
-                <span className="text-muted-foreground text-sm">Jenis Mitra/Organisasi:</span>
-                <p className="font-medium">{selectedKemitraan.jenis_mitra}</p>
+                <span className="text-muted-foreground text-sm block mb-1">Jenis Mitra/Organisasi:</span>
+                <p className="font-medium break-words">{selectedKemitraan.jenis_mitra}</p>
               </div>
               {selectedKemitraan.kategori_pelibatan && (
                 <div>
-                  <span className="text-muted-foreground text-sm">Kategori:</span>
-                  <p className="font-medium">{selectedKemitraan.kategori_pelibatan}</p>
+                  <span className="text-muted-foreground text-sm block mb-1">Kategori:</span>
+                  <p className="font-medium break-words">{selectedKemitraan.kategori_pelibatan}</p>
                 </div>
               )}
               {selectedKemitraan.jumlah_kegiatan && (
                 <div>
-                  <span className="text-muted-foreground text-sm">Jumlah Kegiatan:</span>
+                  <span className="text-muted-foreground text-sm block mb-1">Jumlah Kegiatan:</span>
                   <p className="font-medium">{selectedKemitraan.jumlah_kegiatan} kegiatan</p>
                 </div>
               )}
               {selectedKemitraan.keterangan && (
-                <div className="col-span-2">
-                  <span className="text-muted-foreground text-sm">Keterangan:</span>
-                  <p className="font-medium">{selectedKemitraan.keterangan}</p>
+                <div>
+                  <span className="text-muted-foreground text-sm block mb-1">Keterangan:</span>
+                  <p className="font-medium break-words">{selectedKemitraan.keterangan}</p>
                 </div>
               )}
             </div>
@@ -545,18 +547,34 @@ export default function KemitraanPage() {
                     type="file"
                     accept=".jpg,.jpeg,.png"
                     multiple
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const files = Array.from(e.target.files || [])
                       if (files.length > 5) {
                         alert("Maksimal 5 foto")
                         e.target.value = ""
                         return
                       }
-                      setFotoKegiatan(files)
+
+                      // Compress images otomatis
+                      if (files.length > 0) {
+                        setUploading(true)
+                        try {
+                          const compressedFiles = await compressImages(files)
+                          setFotoKegiatan(compressedFiles)
+                        } catch (error) {
+                          console.error("Error compressing images:", error)
+                          setFotoKegiatan(files)
+                        } finally {
+                          setUploading(false)
+                        }
+                      }
                     }}
                     className="mt-1"
+                    disabled={uploading}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Format: JPG/PNG, Max 5 file</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Format: JPG/PNG, Max 5 file {uploading && "• Mengompres foto..."}
+                  </p>
                 </div>
 
                 {showFileBantuan && (
@@ -568,10 +586,23 @@ export default function KemitraanPage() {
                       id="file_bantuan"
                       type="file"
                       accept=".pdf"
-                      onChange={(e) => setFileBantuan(e.target.files?.[0] || null)}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          const validation = validatePDFSize(file)
+                          if (!validation.valid) {
+                            setPdfError(validation.message || "File terlalu besar")
+                            e.target.value = ""
+                            setFileBantuan(null)
+                            return
+                          }
+                          setPdfError(null)
+                          setFileBantuan(file)
+                        }
+                      }}
                       className="mt-1"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">Format: PDF</p>
+                    <p className="text-xs text-muted-foreground mt-1">Format: PDF, Maksimal 1 MB</p>
                   </div>
                 )}
 
@@ -584,10 +615,23 @@ export default function KemitraanPage() {
                       id="file_kerjasama"
                       type="file"
                       accept=".pdf"
-                      onChange={(e) => setFileKerjasama(e.target.files?.[0] || null)}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          const validation = validatePDFSize(file)
+                          if (!validation.valid) {
+                            setPdfError(validation.message || "File terlalu besar")
+                            e.target.value = ""
+                            setFileKerjasama(null)
+                            return
+                          }
+                          setPdfError(null)
+                          setFileKerjasama(file)
+                        }
+                      }}
                       className="mt-1"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">Format: PDF</p>
+                    <p className="text-xs text-muted-foreground mt-1">Format: PDF, Maksimal 1 MB</p>
                   </div>
                 )}
 
@@ -605,6 +649,12 @@ export default function KemitraanPage() {
                     className="w-full mt-1 px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm"
                   />
                 </div>
+
+                {pdfError && (
+                  <div className="p-2 bg-amber-100 border border-amber-300 rounded text-xs text-amber-700">
+                    {pdfError}
+                  </div>
+                )}
 
                 {error && (
                   <div className="p-2 bg-destructive/10 border border-destructive rounded text-xs text-destructive">

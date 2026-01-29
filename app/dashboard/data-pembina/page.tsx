@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import { compressImages, validatePDFSize, validatePDFFiles } from "@/lib/image-compression"
 
 interface PembinaRecord {
   id: number
@@ -58,6 +59,7 @@ export default function DataPembinaPage() {
   const [fotoPelantikan, setFotoPelantikan] = useState<File[]>([])
   const [berkasLain, setBerkasLain] = useState<File[]>([])
   const [uploading, setUploading] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
 
   useEffect(() => {
     const checkAuthAndFetch = async () => {
@@ -349,10 +351,23 @@ export default function DataPembinaPage() {
                     id="file_sk"
                     type="file"
                     accept=".pdf"
-                    onChange={(e) => setFileSK(e.target.files?.[0] || null)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const validation = validatePDFSize(file)
+                        if (!validation.valid) {
+                          setPdfError(validation.message || "File terlalu besar")
+                          e.target.value = ""
+                          setFileSK(null)
+                          return
+                        }
+                        setPdfError(null)
+                        setFileSK(file)
+                      }
+                    }}
                     className="mt-1"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Format: PDF</p>
+                  <p className="text-xs text-muted-foreground mt-1">Format: PDF, Maksimal 1 MB</p>
                 </div>
 
                 <div>
@@ -373,10 +388,23 @@ export default function DataPembinaPage() {
                     id="file_kta"
                     type="file"
                     accept=".pdf"
-                    onChange={(e) => setFileKTA(e.target.files?.[0] || null)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const validation = validatePDFSize(file)
+                        if (!validation.valid) {
+                          setPdfError(validation.message || "File terlalu besar")
+                          e.target.value = ""
+                          setFileKTA(null)
+                          return
+                        }
+                        setPdfError(null)
+                        setFileKTA(file)
+                      }
+                    }}
                     className="mt-1"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Format: PDF</p>
+                  <p className="text-xs text-muted-foreground mt-1">Format: PDF, Maksimal 1 MB</p>
                 </div>
 
                 <div>
@@ -403,14 +431,24 @@ export default function DataPembinaPage() {
                     multiple
                     onChange={(e) => {
                       const files = Array.from(e.target.files || []).slice(0, 4)
-                      setFileIjazah(files)
+                      if (files.length > 0) {
+                        const validation = validatePDFFiles(files)
+                        if (!validation.valid) {
+                          setPdfError(validation.message || "File terlalu besar")
+                          e.target.value = ""
+                          setFileIjazah([])
+                          return
+                        }
+                        setPdfError(null)
+                        setFileIjazah(files)
+                      }
                     }}
                     className="mt-1"
                   />
                   {fileIjazah.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">{fileIjazah.length} file dipilih (max 4)</p>
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">Format: PDF, maksimal 4 file</p>
+                  <p className="text-xs text-muted-foreground mt-1">Format: PDF, maksimal 4 file, masing-masing max 1 MB</p>
                 </div>
 
                 <div>
@@ -420,16 +458,32 @@ export default function DataPembinaPage() {
                     type="file"
                     accept=".jpg,.jpeg,.png"
                     multiple
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const files = Array.from(e.target.files || []).slice(0, 5)
-                      setFotoPelantikan(files)
+
+                      // Compress images otomatis
+                      if (files.length > 0) {
+                        setUploading(true)
+                        try {
+                          const compressedFiles = await compressImages(files)
+                          setFotoPelantikan(compressedFiles)
+                        } catch (error) {
+                          console.error("Error compressing images:", error)
+                          setFotoPelantikan(files)
+                        } finally {
+                          setUploading(false)
+                        }
+                      }
                     }}
                     className="mt-1"
+                    disabled={uploading}
                   />
                   {fotoPelantikan.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">{fotoPelantikan.length} file dipilih (max 5)</p>
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">Format: JPEG/JPG/PNG, maksimal 5 file</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Format: JPEG/JPG/PNG, maksimal 5 file {uploading && "• Mengompres foto..."}
+                  </p>
                 </div>
 
                 <div>
@@ -441,14 +495,24 @@ export default function DataPembinaPage() {
                     multiple
                     onChange={(e) => {
                       const files = Array.from(e.target.files || []).slice(0, 5)
-                      setBerkasLain(files)
+                      if (files.length > 0) {
+                        const validation = validatePDFFiles(files)
+                        if (!validation.valid) {
+                          setPdfError(validation.message || "File terlalu besar")
+                          e.target.value = ""
+                          setBerkasLain([])
+                          return
+                        }
+                        setPdfError(null)
+                        setBerkasLain(files)
+                      }
                     }}
                     className="mt-1"
                   />
                   {berkasLain.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">{berkasLain.length} file dipilih (max 5)</p>
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">Format: PDF (Narakarya, SHB, THB, dll), maksimal 5 file</p>
+                  <p className="text-xs text-muted-foreground mt-1">Format: PDF (Narakarya, SHB, THB, dll), maksimal 5 file, masing-masing max 1 MB</p>
                 </div>
 
                 <div>
@@ -474,6 +538,12 @@ export default function DataPembinaPage() {
                     className="w-full mt-1 px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm"
                   />
                 </div>
+
+                {pdfError && (
+                  <div className="p-2 bg-amber-100 border border-amber-300 rounded text-xs text-amber-700">
+                    {pdfError}
+                  </div>
+                )}
 
                 {error && (
                   <div className="p-2 bg-destructive/10 border border-destructive rounded text-xs text-destructive">

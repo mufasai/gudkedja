@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import { compressImages, validatePDFSize } from "@/lib/image-compression"
 
 interface KegiatanRecord {
   id: number
@@ -67,6 +68,7 @@ export default function KegiatanPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [selectedKegiatan, setSelectedKegiatan] = useState<KegiatanRecord | null>(null)
   const [filterKategori, setFilterKategori] = useState("Semua")
+  const [pdfError, setPdfError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     nama_kegiatan: "",
@@ -587,10 +589,23 @@ export default function KegiatanPage() {
                     id="file_proposal"
                     type="file"
                     accept=".pdf"
-                    onChange={(e) => setFileProposal(e.target.files?.[0] || null)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const validation = validatePDFSize(file)
+                        if (!validation.valid) {
+                          setPdfError(validation.message || null)
+                          setFileProposal(null)
+                          e.target.value = ""
+                        } else {
+                          setPdfError(null)
+                          setFileProposal(file)
+                        }
+                      }
+                    }}
                     className="mt-1"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Format: PDF</p>
+                  <p className="text-xs text-muted-foreground mt-1">Format: PDF, Maksimal 1 MB</p>
                 </div>
 
                 <div>
@@ -601,11 +616,31 @@ export default function KegiatanPage() {
                     id="file_laporan"
                     type="file"
                     accept=".pdf"
-                    onChange={(e) => setFileLaporan(e.target.files?.[0] || null)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        const validation = validatePDFSize(file)
+                        if (!validation.valid) {
+                          setPdfError(validation.message || null)
+                          setFileLaporan(null)
+                          e.target.value = ""
+                        } else {
+                          setPdfError(null)
+                          setFileLaporan(file)
+                        }
+                      }
+                    }}
                     className="mt-1"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Format: PDF</p>
+                  <p className="text-xs text-muted-foreground mt-1">Format: PDF, Maksimal 1 MB</p>
                 </div>
+
+                {/* PDF Error Message */}
+                {pdfError && (
+                  <div className="p-3 bg-destructive/10 border border-destructive rounded text-sm text-destructive">
+                    ⚠️ {pdfError}
+                  </div>
+                )}
 
                 <div>
                   <Label htmlFor="foto_kegiatan" className="text-sm font-medium">
@@ -616,18 +651,34 @@ export default function KegiatanPage() {
                     type="file"
                     accept=".jpg,.jpeg,.png"
                     multiple
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const files = Array.from(e.target.files || [])
                       if (files.length > 5) {
                         alert("Maksimal 5 foto")
                         e.target.value = ""
                         return
                       }
-                      setFotoKegiatan(files)
+
+                      // Compress images otomatis
+                      if (files.length > 0) {
+                        setUploading(true)
+                        try {
+                          const compressedFiles = await compressImages(files)
+                          setFotoKegiatan(compressedFiles)
+                        } catch (error) {
+                          console.error("Error compressing images:", error)
+                          setFotoKegiatan(files) // Fallback ke original jika gagal
+                        } finally {
+                          setUploading(false)
+                        }
+                      }
                     }}
                     className="mt-1"
+                    disabled={uploading}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Format: JPG/PNG, Max 5 file</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Format: JPG/PNG, Max 5 file {uploading && "• Mengompres foto..."}
+                  </p>
                 </div>
 
                 <div>
@@ -740,7 +791,7 @@ export default function KegiatanPage() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   )
 }
