@@ -118,7 +118,7 @@ export const generateSuratHTML = (params: SuratTemplateParams): string => {
             width: 100%;
           }
           .header-line {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: bold;
             margin: 1px 0;
             letter-spacing: 0.5px;
@@ -128,7 +128,7 @@ export const generateSuratHTML = (params: SuratTemplateParams): string => {
           /* Surat Keterangan Title */
           .surat-title {
             position: absolute;
-            top: 115mm;
+            top: 105mm;
             left: 50%;
             transform: translateX(-50%);
             font-family: 'Brush Script MT', 'Lucida Handwriting', cursive;
@@ -142,7 +142,7 @@ export const generateSuratHTML = (params: SuratTemplateParams): string => {
           /* Nomor Surat */
           .nomor-surat {
             position: absolute;
-            top: 130mm;
+            top: 120mm;
             left: 50%;
             transform: translateX(-50%);
             font-size: 13px;
@@ -152,7 +152,7 @@ export const generateSuratHTML = (params: SuratTemplateParams): string => {
           /* Intro Text */
           .intro-text {
             position: absolute;
-            top: 138mm;
+            top: 132mm;
             left: 35mm;
             right: 35mm;
             font-size: 16px;
@@ -175,17 +175,17 @@ export const generateSuratHTML = (params: SuratTemplateParams): string => {
             font-weight: bold;
             color: #000000;
           }
-          .nama-label { top: 155mm; }
-          .nama-value { top: 155mm; }
-          .ttl-label { top: 165mm; }
-          .ttl-value { top: 167mm; }
-          .golongan-label { top: 175mm; }
-          .golongan-value { top: 175mm; }
+          .nama-label { top: 150mm; }
+          .nama-value { top: 150mm; }
+          .ttl-label { top: 159mm; }
+          .ttl-value { top: 159mm; }
+          .golongan-label { top: 168mm; }
+          .golongan-value { top: 168mm; }
           
           /* Keterangan Box */
           .keterangan-text {
             position: absolute;
-            top: 188mm;
+            top: 178mm;
             left: 35mm;
             right: 35mm;
             font-size: 16px;
@@ -197,7 +197,7 @@ export const generateSuratHTML = (params: SuratTemplateParams): string => {
           /* Footer */
           .tempat-tanggal {
             position: absolute;
-            top: 232mm;
+            top: 223mm;
             right: 35mm;
             font-size: 16px;
             text-align: center;
@@ -213,7 +213,7 @@ export const generateSuratHTML = (params: SuratTemplateParams): string => {
           }
           .nama-pembina {
             position: absolute;
-            top: 259mm;
+            top: 266mm;
             right: 35mm;
             font-size: 16px;
             font-weight: bold;
@@ -223,7 +223,7 @@ export const generateSuratHTML = (params: SuratTemplateParams): string => {
           }
           .nip-pembina {
             position: absolute;
-            top: 264mm;
+            top: 271mm;
             right: 35mm;
             font-size: 16px;
             text-align: center;

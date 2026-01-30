@@ -292,20 +292,33 @@ function MenuSKU({
         </div>
       </div>
 
-      {/* Menu TKK - Hanya untuk Siaga */}
-      {peserta.golongan === "Siaga" && (
-        <div className="bg-card rounded-lg shadow-lg p-6">
-          <h2 className="text-lg font-bold mb-4">SKK / TKK</h2>
-          <div className="space-y-3">
+      {/* Menu TKK - Untuk Semua Golongan */}
+      <div className="bg-card rounded-lg shadow-lg p-6">
+        <h2 className="text-lg font-bold mb-4">SKK / TKK</h2>
+        <div className="space-y-3">
+          {peserta.golongan === "Siaga" && (
             <SKUMenuButton
               label="SKK / TKK SIAGA"
               sublabel="10 Wajib + 20 Pilihan"
               onClick={onSelectTKK}
               color="amber"
             />
-          </div>
+          )}
+          {peserta.golongan === "Penggalang" && (
+            <SKUMenuButton
+              label="SKK / TKK PENGGALANG"
+              sublabel="Kecakapan Khusus"
+              onClick={onSelectTKK}
+              color="amber"
+            />
+          )}
+          {peserta.golongan !== "Siaga" && peserta.golongan !== "Penggalang" && (
+            <p className="text-muted-foreground text-center py-4">
+              SKK untuk golongan {peserta.golongan} belum tersedia
+            </p>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -1047,7 +1060,7 @@ function TKKChecklist({
       <div className="bg-card rounded-lg shadow-lg p-6">
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h2 className="text-lg font-bold">SKK / TKK Siaga</h2>
+            <h2 className="text-lg font-bold">SKK / TKK {peserta.golongan}</h2>
             <p className="text-sm text-muted-foreground">{peserta.nama_lengkap}</p>
           </div>
           <Button variant="outline" size="sm" onClick={onBack}>
