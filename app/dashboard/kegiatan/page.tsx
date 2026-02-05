@@ -78,12 +78,21 @@ export default function KegiatanPage() {
     jenis_kegiatan: "",
     peserta_hadir: "0",
     keterangan: "",
+    nama_pembina_peserta: "", // Untuk partisipasi
   })
 
   // File states
   const [fileProposal, setFileProposal] = useState<File | null>(null)
   const [fileLaporan, setFileLaporan] = useState<File | null>(null)
   const [fotoKegiatan, setFotoKegiatan] = useState<File[]>([])
+
+  // Existing file URLs (for edit mode)
+  const [existingProposalUrl, setExistingProposalUrl] = useState<string | null>(null)
+  const [existingLaporanUrl, setExistingLaporanUrl] = useState<string | null>(null)
+  const [existingFotoUrls, setExistingFotoUrls] = useState<string[]>([])
+
+  const [pembinaList, setPembinaList] = useState<any[]>([])
+  const [pesertaList, setPesertaList] = useState<any[]>([])
 
   useEffect(() => {
     const checkAuthAndFetch = async () => {
@@ -103,6 +112,21 @@ export default function KegiatanPage() {
       if (kegiatan) {
         setKegiatanData(kegiatan)
       }
+
+      // Fetch pembina dan peserta untuk dropdown
+      const { data: pembina } = await supabase
+        .from("data_pembina")
+        .select("id, nama_lengkap")
+        .order("nama_lengkap", { ascending: true })
+
+      const { data: peserta } = await supabase
+        .from("data_peserta_didik")
+        .select("id, nama_lengkap")
+        .order("nama_lengkap", { ascending: true })
+
+      if (pembina) setPembinaList(pembina)
+      if (peserta) setPesertaList(peserta)
+
       setLoading(false)
     }
     checkAuthAndFetch()
@@ -144,10 +168,11 @@ export default function KegiatanPage() {
       const supabase = createClient()
 
       // Upload files
-      let proposalUrl = null
-      let laporanUrl = null
-      let fotoUrls: string[] = []
+      let proposalUrl = existingProposalUrl // Preserve existing URL
+      let laporanUrl = existingLaporanUrl // Preserve existing URL
+      let fotoUrls: string[] = [...existingFotoUrls] // Preserve existing URLs
 
+      // Only upload new files if provided
       if (fileProposal) {
         proposalUrl = await uploadFile(fileProposal, "proposal")
       }
@@ -155,6 +180,7 @@ export default function KegiatanPage() {
         laporanUrl = await uploadFile(fileLaporan, "laporan")
       }
       if (fotoKegiatan.length > 0) {
+        fotoUrls = [] // Replace all photos if new ones uploaded
         for (const foto of fotoKegiatan) {
           const url = await uploadFile(foto, "foto")
           if (url) fotoUrls.push(url)
@@ -165,6 +191,8 @@ export default function KegiatanPage() {
         ...formData,
         peserta_hadir: Number.parseInt(formData.peserta_hadir),
       }
+
+      // Only update file fields if there's a value
       if (proposalUrl) dataToSave.file_proposal = proposalUrl
       if (laporanUrl) dataToSave.file_laporan = laporanUrl
       if (fotoUrls.length > 0) dataToSave.foto_kegiatan = fotoUrls
@@ -214,10 +242,14 @@ export default function KegiatanPage() {
       jenis_kegiatan: "",
       peserta_hadir: "0",
       keterangan: "",
+      nama_pembina_peserta: "",
     })
     setFileProposal(null)
     setFileLaporan(null)
     setFotoKegiatan([])
+    setExistingProposalUrl(null)
+    setExistingLaporanUrl(null)
+    setExistingFotoUrls([])
     setEditingId(null)
   }
 
@@ -245,7 +277,27 @@ export default function KegiatanPage() {
       jenis_kegiatan: kegiatan.jenis_kegiatan || "",
       peserta_hadir: String(kegiatan.peserta_hadir),
       keterangan: kegiatan.keterangan || "",
+      nama_pembina_peserta: (kegiatan as any).nama_pembina_peserta || "",
     })
+
+    // Load existing file URLs
+    setExistingProposalUrl(kegiatan.file_proposal)
+    setExistingLaporanUrl(kegiatan.file_laporan)
+
+    // Parse foto_kegiatan
+    let fotoArray: string[] = []
+    if (Array.isArray(kegiatan.foto_kegiatan)) {
+      fotoArray = kegiatan.foto_kegiatan
+    } else if (typeof kegiatan.foto_kegiatan === 'string' && kegiatan.foto_kegiatan) {
+      try {
+        const parsed = JSON.parse(kegiatan.foto_kegiatan)
+        fotoArray = Array.isArray(parsed) ? parsed : []
+      } catch {
+        fotoArray = []
+      }
+    }
+    setExistingFotoUrls(fotoArray)
+
     setEditingId(kegiatan.id)
     setSelectedKegiatan(null)
   }
@@ -357,6 +409,12 @@ export default function KegiatanPage() {
                 <span className="text-muted-foreground text-sm">Peserta Hadir:</span>
                 <p className="font-medium">{selectedKegiatan.peserta_hadir} orang</p>
               </div>
+              {selectedKegiatan.kategori === "Partisipasi" && (selectedKegiatan as any).nama_pembina_peserta && (
+                <div>
+                  <span className="text-muted-foreground text-sm">Nama Pembina/Peserta:</span>
+                  <p className="font-medium">{(selectedKegiatan as any).nama_pembina_peserta}</p>
+                </div>
+              )}
               {selectedKegiatan.keterangan && (
                 <div className="col-span-2">
                   <span className="text-muted-foreground text-sm">Keterangan:</span>
@@ -550,6 +608,42 @@ export default function KegiatanPage() {
                   </div>
                 )}
 
+                {/* Conditional: Show nama pembina/peserta for Partisipasi */}
+                {formData.kategori === "Partisipasi" && (
+                  <div>
+                    <Label htmlFor="nama_pembina_peserta" className="text-sm font-medium">
+                      Nama Pembina/Peserta *
+                    </Label>
+                    <select
+                      id="nama_pembina_peserta"
+                      name="nama_pembina_peserta"
+                      value={formData.nama_pembina_peserta}
+                      onChange={handleChange}
+                      required
+                      className="w-full mt-1 px-3 py-2 border border-border rounded-md bg-input text-foreground text-sm"
+                    >
+                      <option value="">-- Pilih Pembina/Peserta --</option>
+                      <optgroup label="Pembina">
+                        {pembinaList.map((pembina) => (
+                          <option key={`pembina-${pembina.id}`} value={`Pembina: ${pembina.nama_lengkap}`}>
+                            {pembina.nama_lengkap}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Peserta">
+                        {pesertaList.map((peserta) => (
+                          <option key={`peserta-${peserta.id}`} value={`Peserta: ${peserta.nama_lengkap}`}>
+                            {peserta.nama_lengkap}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Pilih pembina atau peserta yang mengikuti kegiatan partisipasi
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <Label htmlFor="lokasi" className="text-sm font-medium">
                     Lokasi
@@ -585,6 +679,22 @@ export default function KegiatanPage() {
                   <Label htmlFor="file_proposal" className="text-sm font-medium">
                     Upload Proposal (PDF)
                   </Label>
+                  {existingProposalUrl && (
+                    <div className="mb-2 p-2 bg-secondary rounded text-xs flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <span>📄</span>
+                        <span>File sudah ada</span>
+                      </span>
+                      <a
+                        href={existingProposalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        Lihat →
+                      </a>
+                    </div>
+                  )}
                   <Input
                     id="file_proposal"
                     type="file"
@@ -605,13 +715,33 @@ export default function KegiatanPage() {
                     }}
                     className="mt-1"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Format: PDF, Maksimal 1 MB</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {existingProposalUrl
+                      ? "Upload file baru untuk mengganti yang lama"
+                      : "Format: PDF, Maksimal 1 MB"}
+                  </p>
                 </div>
 
                 <div>
                   <Label htmlFor="file_laporan" className="text-sm font-medium">
                     Upload Laporan (PDF)
                   </Label>
+                  {existingLaporanUrl && (
+                    <div className="mb-2 p-2 bg-secondary rounded text-xs flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <span>📄</span>
+                        <span>File sudah ada</span>
+                      </span>
+                      <a
+                        href={existingLaporanUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        Lihat →
+                      </a>
+                    </div>
+                  )}
                   <Input
                     id="file_laporan"
                     type="file"
@@ -632,7 +762,11 @@ export default function KegiatanPage() {
                     }}
                     className="mt-1"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Format: PDF, Maksimal 1 MB</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {existingLaporanUrl
+                      ? "Upload file baru untuk mengganti yang lama"
+                      : "Format: PDF, Maksimal 1 MB"}
+                  </p>
                 </div>
 
                 {/* PDF Error Message */}
