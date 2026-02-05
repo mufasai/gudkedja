@@ -405,43 +405,44 @@ export function hasSyaratSubItems(syarat: string | SyaratSKU): syarat is SyaratS
 
 // Data TKK Siaga
 export const TKK_SIAGA_WAJIB = [
-    { id: "pppk", nama: "PPPK", icon: "🏥" },
-    { id: "pengatur_ruangan", nama: "Pengatur Ruangan", icon: "🏠" },
-    { id: "pengamat", nama: "Pengamat", icon: "👁️" },
-    { id: "juru_masak", nama: "Juru Masak", icon: "🍳" },
-    { id: "berkemah", nama: "Berkemah", icon: "⛺" },
-    { id: "penabung", nama: "Penabung", icon: "💰" },
-    { id: "penjahit", nama: "Penjahit", icon: "🧵" },
-    { id: "juru_kebun", nama: "Juru Kebun", icon: "🌱" },
-    { id: "pengaman_kampung", nama: "Pengaman Kampung", icon: "🛡️" },
-    { id: "gerak_jalan", nama: "Gerak Jalan", icon: "🚶" },
+    { id: "pppk", nama: "PPPK", icon: "🏥", bidang: "Kesehatan dan Keselamatan" },
+    { id: "pengatur_ruangan", nama: "Pengatur Ruangan", icon: "🏠", bidang: "Keterampilan dan Teknik Pembangunan" },
+    { id: "pengamat", nama: "Pengamat", icon: "👁️", bidang: "Pengetahuan dan Kecerdasan" },
+    { id: "juru_masak", nama: "Juru Masak", icon: "🍳", bidang: "Keterampilan dan Teknik Pembangunan" },
+    { id: "berkemah", nama: "Berkemah", icon: "⛺", bidang: "Keterampilan dan Teknik Pembangunan" },
+    { id: "penabung", nama: "Penabung", icon: "💰", bidang: "Ekonomi dan Kewiraswastaan" },
+    { id: "penjahit", nama: "Penjahit", icon: "🧵", bidang: "Keterampilan dan Teknik Pembangunan" },
+    { id: "juru_kebun", nama: "Juru Kebun", icon: "🌱", bidang: "Pertanian dan Kehutanan" },
+    { id: "pengaman_kampung", nama: "Pengaman Kampung", icon: "🛡️", bidang: "Kesehatan dan Keselamatan" },
+    { id: "gerak_jalan", nama: "Gerak Jalan", icon: "🚶", bidang: "Jasmani dan Kesehatan" },
 ];
 
 export const TKK_SIAGA_PILIHAN = [
-    { id: "qori", nama: "Qori", icon: "📖" },
-    { id: "sholat", nama: "Sholat", icon: "🕌" },
-    { id: "muadzin", nama: "Muadzin", icon: "📢" },
-    { id: "khotib", nama: "Khotib", icon: "🎤" },
-    { id: "penyanyi", nama: "Penyanyi", icon: "🎵" },
-    { id: "pelukis", nama: "Pelukis", icon: "🎨" },
-    { id: "pengatur_meja_makan", nama: "Pengatur Meja Makan", icon: "🍽️" },
-    { id: "pengarang", nama: "Pengarang", icon: "✍️" },
-    { id: "dirigen", nama: "Dirigen", icon: "🎼" },
-    { id: "juru_isyarat_bendera", nama: "Juru Isyarat Bendera", icon: "🚩" },
-    { id: "pembaca", nama: "Pembaca", icon: "📚" },
-    { id: "pengendara_sepeda", nama: "Pengendara Sepeda", icon: "🚲" },
-    { id: "penghijauan", nama: "Penghijauan", icon: "🌳" },
-    { id: "penyelidik", nama: "Penyelidik", icon: "🔍" },
-    { id: "juru_anyam", nama: "Juru Anyam", icon: "🧺" },
-    { id: "pencari_jejak", nama: "Pencari Jejak/Penjelajah", icon: "🧭" },
-    { id: "pembantu_ibu", nama: "Pembantu Ibu", icon: "👩‍👧" },
-    { id: "pengatur_lalu_lintas", nama: "Pengatur Lalu Lintas", icon: "🚦" },
-    { id: "penangkap_ikan", nama: "Penangkap Ikan", icon: "🎣" },
-    { id: "pengumpul", nama: "Pengumpul", icon: "📦" },
+    { id: "qori", nama: "Qori", icon: "📖", bidang: "Patriotisme dan Seni Budaya" },
+    { id: "sholat", nama: "Sholat", icon: "🕌", bidang: "Patriotisme dan Seni Budaya" },
+    { id: "muadzin", nama: "Muadzin", icon: "📢", bidang: "Patriotisme dan Seni Budaya" },
+    { id: "khotib", nama: "Khotib", icon: "🎤", bidang: "Patriotisme dan Seni Budaya" },
+    { id: "penyanyi", nama: "Penyanyi", icon: "🎵", bidang: "Patriotisme dan Seni Budaya" },
+    { id: "pelukis", nama: "Pelukis", icon: "🎨", bidang: "Patriotisme dan Seni Budaya" },
+    { id: "pengatur_meja_makan", nama: "Pengatur Meja Makan", icon: "🍽️", bidang: "Keterampilan dan Teknik Pembangunan" },
+    { id: "pengarang", nama: "Pengarang", icon: "✍️", bidang: "Patriotisme dan Seni Budaya" },
+    { id: "dirigen", nama: "Dirigen", icon: "🎼", bidang: "Patriotisme dan Seni Budaya" },
+    { id: "juru_isyarat_bendera", nama: "Juru Isyarat Bendera", icon: "🚩", bidang: "Komunikasi dan Elektronika" },
+    { id: "pembaca", nama: "Pembaca", icon: "📚", bidang: "Patriotisme dan Seni Budaya" },
+    { id: "pengendara_sepeda", nama: "Pengendara Sepeda", icon: "🚲", bidang: "Jasmani dan Kesehatan" },
+    { id: "penghijauan", nama: "Penghijauan", icon: "🌳", bidang: "Pertanian dan Kehutanan" },
+    { id: "penyelidik", nama: "Penyelidik", icon: "🔍", bidang: "Pengetahuan dan Kecerdasan" },
+    { id: "juru_anyam", nama: "Juru Anyam", icon: "🧺", bidang: "Keterampilan dan Teknik Pembangunan" },
+    { id: "pencari_jejak", nama: "Pencari Jejak/Penjelajah", icon: "🧭", bidang: "Pengetahuan dan Kecerdasan" },
+    { id: "pembantu_ibu", nama: "Pembantu Ibu", icon: "👩‍👧", bidang: "Keterampilan dan Teknik Pembangunan" },
+    { id: "pengatur_lalu_lintas", nama: "Pengatur Lalu Lintas", icon: "🚦", bidang: "Kesehatan dan Keselamatan" },
+    { id: "penangkap_ikan", nama: "Penangkap Ikan", icon: "🎣", bidang: "Pertanian dan Kehutanan" },
+    { id: "pengumpul", nama: "Pengumpul", icon: "📦", bidang: "Ekonomi dan Kewiraswastaan" },
 ];
 
 export interface TKKItem {
     id: string;
     nama: string;
     icon: string;
+    bidang: string;
 }

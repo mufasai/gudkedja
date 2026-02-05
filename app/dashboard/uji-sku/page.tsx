@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
 import { SKU_CONFIG, type JenisSKU, TKK_SIAGA_WAJIB, TKK_SIAGA_PILIHAN, type TKKItem, type SyaratSKU, getSyaratText, hasSyaratSubItems } from "@/lib/sku-data"
-import { formatTanggal, getNamaHari, extractKodeGudep, generateSuratHTML } from "@/lib/surat-template"
+import { formatTanggal, getNamaHari, extractKodeGudep, generateSuratHTML, generatePiagamSKKHTML, generateNomorSertifikatSKK } from "@/lib/surat-template"
 
 interface PesertaRecord {
   id: number
@@ -29,7 +29,7 @@ export default function UjiSKUPage() {
   const [pesertaList, setPesertaList] = useState<PesertaRecord[]>([])
   const [searchNama, setSearchNama] = useState("")
   const [selectedPeserta, setSelectedPeserta] = useState<PesertaRecord | null>(null)
-  const [step, setStep] = useState<"search" | "menu" | "sku" | "tkk">("search")
+  const [step, setStep] = useState<"search" | "menu" | "sku">("search")
   const [selectedSKU, setSelectedSKU] = useState<JenisSKU | null>(null)
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function UjiSKUPage() {
   }
 
   const handleBack = () => {
-    if (step === "sku" || step === "tkk") {
+    if (step === "sku") {
       setStep("menu")
       setSelectedSKU(null)
     } else if (step === "menu") {
@@ -97,8 +97,8 @@ export default function UjiSKUPage() {
       <div className="bg-primary text-primary-foreground py-4 px-4 sm:py-6 sm:px-6">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold">Uji SKU & SKK</h1>
-            <p className="text-sm text-primary-foreground/80">Pencatatan Uji Kecakapan Pramuka</p>
+            <h1 className="text-2xl font-bold">Uji SKU</h1>
+            <p className="text-sm text-primary-foreground/80">Pencatatan Uji Kecakapan Umum Pramuka</p>
           </div>
           <Link href="/dashboard">
             <Button variant="outline" className="bg-primary-foreground text-primary hover:bg-primary-foreground/90">
@@ -123,7 +123,6 @@ export default function UjiSKUPage() {
           <MenuSKU
             peserta={selectedPeserta}
             onSelectSKU={handleSelectSKU}
-            onSelectTKK={() => setStep("tkk")}
             onBack={handleBack}
           />
         )}
@@ -132,13 +131,6 @@ export default function UjiSKUPage() {
           <SKUChecklist
             peserta={selectedPeserta}
             jenisSKU={selectedSKU}
-            onBack={handleBack}
-          />
-        )}
-
-        {step === "tkk" && selectedPeserta && (
-          <TKKChecklist
-            peserta={selectedPeserta}
             onBack={handleBack}
           />
         )}
@@ -212,12 +204,10 @@ function SearchPeserta({
 function MenuSKU({
   peserta,
   onSelectSKU,
-  onSelectTKK,
   onBack,
 }: {
   peserta: PesertaRecord
   onSelectSKU: (jenis: JenisSKU) => void
-  onSelectTKK: () => void
   onBack: () => void
 }) {
   return (
@@ -292,33 +282,7 @@ function MenuSKU({
         </div>
       </div>
 
-      {/* Menu TKK - Untuk Semua Golongan */}
-      <div className="bg-card rounded-lg shadow-lg p-6">
-        <h2 className="text-lg font-bold mb-4">SKK / TKK</h2>
-        <div className="space-y-3">
-          {peserta.golongan === "Siaga" && (
-            <SKUMenuButton
-              label="SKK / TKK SIAGA"
-              sublabel="10 Wajib + 20 Pilihan"
-              onClick={onSelectTKK}
-              color="amber"
-            />
-          )}
-          {peserta.golongan === "Penggalang" && (
-            <SKUMenuButton
-              label="SKK / TKK PENGGALANG"
-              sublabel="Kecakapan Khusus"
-              onClick={onSelectTKK}
-              color="amber"
-            />
-          )}
-          {peserta.golongan !== "Siaga" && peserta.golongan !== "Penggalang" && (
-            <p className="text-muted-foreground text-center py-4">
-              SKK untuk golongan {peserta.golongan} belum tersedia
-            </p>
-          )}
-        </div>
-      </div>
+      {/* Menu TKK - Dihapus, sudah dipindah ke halaman terpisah */}
     </div>
   )
 }
@@ -738,7 +702,8 @@ function SuratLulusModal({
       return
     }
 
-    // Generate HTML menggunakan template
+    // Generate HTML menggunakan template dengan URL absolut
+    const baseUrl = window.location.origin
     const printContent = generateSuratHTML({
       kodeGudep: extractKodeGudep(nomorSurat),
       nomorSurat,
@@ -753,25 +718,49 @@ function SuratLulusModal({
       tanggalTerbit,
       namaPembina,
       nipPembina,
-    })
+    }).replace('/bg-surat.png', `${baseUrl}/bg-surat.png`)
 
-    // Open print window
+    // Buka window baru untuk print
     const printWindow = window.open('', '_blank')
-    if (printWindow) {
+    if (!printWindow) {
+      alert("Pop-up diblokir. Silakan izinkan pop-up untuk aplikasi ini.")
+      setSaving(false)
+      return
+    }
+
+    // Tulis loading indicator dulu
+    printWindow.document.write(`
+        <html>
+        <head><title>Loading...</title></head>
+        <body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#f5f5f5;">
+            <div style="text-align:center;">
+                <div style="font-size:48px;margin-bottom:16px;">⚜️</div>
+                <div style="font-size:18px;color:#666;">Memuat surat...</div>
+                <div style="font-size:14px;color:#999;margin-top:8px;">Jika loading lama, tutup popup lalu gunakan Share > Save to File</div>
+            </div>
+        </body>
+        </html>
+    `)
+
+    // Render konten langsung tanpa menunggu preload
+    // Ini lebih cepat untuk mobile
+    setTimeout(() => {
+      printWindow.document.open()
       printWindow.document.write(printContent)
       printWindow.document.close()
 
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print()
-        }, 500)
-      }
-    } else {
-      alert("Pop-up diblokir. Silakan izinkan pop-up untuk aplikasi ini.")
-    }
+      // Tunggu sebentar untuk render, lalu trigger print
+      setTimeout(() => {
+        printWindow.focus()
+        printWindow.print()
 
-    setSaving(false)
-    onClose()
+        // Close modal setelah print dialog muncul
+        setTimeout(() => {
+          setSaving(false)
+          onClose()
+        }, 300)
+      }, 500)
+    }, 300)
   }
 
   return (
@@ -911,477 +900,3 @@ function GuideButtons() {
   )
 }
 
-// Component: TKK Checklist
-function TKKChecklist({
-  peserta,
-  onBack,
-}: {
-  peserta: PesertaRecord
-  onBack: () => void
-}) {
-  const [progress, setProgress] = useState<Record<string, { status: string; tanggal: string; pembina: string }>>({})
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [showPiagamModal, setShowPiagamModal] = useState<TKKItem | null>(null)
-
-  useEffect(() => {
-    const fetchProgress = async () => {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from("tkk_progress")
-        .select("*")
-        .eq("peserta_id", peserta.id)
-
-      if (data) {
-        const progressMap: Record<string, { status: string; tanggal: string; pembina: string }> = {}
-        data.forEach((item: any) => {
-          progressMap[item.tkk_id] = {
-            status: item.status,
-            tanggal: item.tanggal_uji || "",
-            pembina: item.pembina_penguji || "",
-          }
-        })
-        setProgress(progressMap)
-      }
-      setLoading(false)
-    }
-    fetchProgress()
-  }, [peserta.id])
-
-  const handleToggle = (tkkId: string) => {
-    setProgress((prev) => {
-      const current = prev[tkkId]
-      if (current?.status === "lulus") {
-        return {
-          ...prev,
-          [tkkId]: { status: "belum", tanggal: "", pembina: "" },
-        }
-      } else {
-        return {
-          ...prev,
-          [tkkId]: {
-            status: "lulus",
-            tanggal: new Date().toISOString().split("T")[0],
-            pembina: current?.pembina || "",
-          },
-        }
-      }
-    })
-  }
-
-  const handleDetailChange = (tkkId: string, field: "tanggal" | "pembina", value: string) => {
-    setProgress((prev) => ({
-      ...prev,
-      [tkkId]: {
-        ...prev[tkkId],
-        status: prev[tkkId]?.status || "belum",
-        tanggal: prev[tkkId]?.tanggal || "",
-        pembina: prev[tkkId]?.pembina || "",
-        [field]: value,
-      },
-    }))
-  }
-
-  const handleSave = async () => {
-    setSaving(true)
-    const supabase = createClient()
-
-    try {
-      // Gunakan upsert untuk setiap item
-      const updates = Object.entries(progress).map(([tkkId, data]) => {
-        const isWajib = TKK_SIAGA_WAJIB.some(t => t.id === tkkId)
-        return {
-          peserta_id: peserta.id,
-          tkk_id: tkkId,
-          jenis: isWajib ? "wajib" : "pilihan",
-          status: data.status,
-          tanggal_uji: data.tanggal || null,
-          pembina_penguji: data.pembina || null,
-        }
-      })
-
-      // Upsert satu per satu
-      for (const update of updates) {
-        const { error } = await supabase
-          .from("tkk_progress")
-          .upsert(update, {
-            onConflict: 'peserta_id,tkk_id'
-          })
-
-        if (error) {
-          console.error("Error upserting TKK item:", error, update)
-          throw error
-        }
-      }
-
-      alert("Progress TKK berhasil disimpan!")
-
-      // Refresh data setelah save
-      const { data: refreshData, error: fetchError } = await supabase
-        .from("tkk_progress")
-        .select("*")
-        .eq("peserta_id", peserta.id)
-
-      if (fetchError) {
-        console.error("Error fetching refresh data:", fetchError)
-      } else if (refreshData) {
-        const progressMap: Record<string, { status: string; tanggal: string; pembina: string }> = {}
-        refreshData.forEach((item: any) => {
-          progressMap[item.tkk_id] = {
-            status: item.status,
-            tanggal: item.tanggal_uji || "",
-            pembina: item.pembina_penguji || "",
-          }
-        })
-        setProgress(progressMap)
-      }
-    } catch (error: any) {
-      console.error("Error saving TKK progress:", error)
-      alert(`Gagal menyimpan progress TKK: ${error.message || 'Silakan coba lagi'} `)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const wajibLulus = TKK_SIAGA_WAJIB.filter(t => progress[t.id]?.status === "lulus").length
-  const pilihanLulus = TKK_SIAGA_PILIHAN.filter(t => progress[t.id]?.status === "lulus").length
-
-  if (loading) {
-    return (
-      <div className="bg-card rounded-lg shadow-lg p-6 text-center">
-        <p className="text-muted-foreground">Memuat data...</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="bg-card rounded-lg shadow-lg p-6">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h2 className="text-lg font-bold">SKK / TKK {peserta.golongan}</h2>
-            <p className="text-sm text-muted-foreground">{peserta.nama_lengkap}</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={onBack}>
-            Kembali
-          </Button>
-        </div>
-
-        {/* Summary */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-3 bg-emerald-50 rounded-lg text-center">
-            <div className="text-2xl font-bold text-emerald-600">{wajibLulus}/10</div>
-            <div className="text-xs text-muted-foreground">TKK Wajib</div>
-          </div>
-          <div className="p-3 bg-amber-50 rounded-lg text-center">
-            <div className="text-2xl font-bold text-amber-600">{pilihanLulus}/20</div>
-            <div className="text-xs text-muted-foreground">TKK Pilihan</div>
-          </div>
-        </div>
-      </div>
-
-      {/* TKK Wajib */}
-      <div className="bg-card rounded-lg shadow-lg p-6">
-        <h3 className="font-bold mb-4 flex items-center gap-2">
-          <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded">WAJIB</span>
-          TKK Wajib (10)
-        </h3>
-        <div className="space-y-3">
-          {TKK_SIAGA_WAJIB.map((tkk) => (
-            <TKKItem
-              key={tkk.id}
-              tkk={tkk}
-              progress={progress[tkk.id]}
-              onToggle={() => handleToggle(tkk.id)}
-              onDetailChange={(field, value) => handleDetailChange(tkk.id, field, value)}
-              onCetakPiagam={() => setShowPiagamModal(tkk)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* TKK Pilihan */}
-      <div className="bg-card rounded-lg shadow-lg p-6">
-        <h3 className="font-bold mb-4 flex items-center gap-2">
-          <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded">PILIHAN</span>
-          TKK Pilihan (20)
-        </h3>
-        <div className="space-y-3">
-          {TKK_SIAGA_PILIHAN.map((tkk) => (
-            <TKKItem
-              key={tkk.id}
-              tkk={tkk}
-              progress={progress[tkk.id]}
-              onToggle={() => handleToggle(tkk.id)}
-              onDetailChange={(field, value) => handleDetailChange(tkk.id, field, value)}
-              onCetakPiagam={() => setShowPiagamModal(tkk)}
-            />
-          ))}
-        </div>
-      </div>
-
-      <Button onClick={handleSave} className="w-full" disabled={saving}>
-        {saving ? "Menyimpan..." : "Simpan Progress TKK"}
-      </Button>
-
-      {/* Modal Piagam TKK */}
-      {showPiagamModal && (
-        <PiagamTKKModal
-          peserta={peserta}
-          tkk={showPiagamModal}
-          tanggalUji={progress[showPiagamModal.id]?.tanggal || ""}
-          onClose={() => setShowPiagamModal(null)}
-        />
-      )}
-    </div>
-  )
-}
-
-// Component: TKK Item
-function TKKItem({
-  tkk,
-  progress,
-  onToggle,
-  onDetailChange,
-  onCetakPiagam,
-}: {
-  tkk: TKKItem
-  progress?: { status: string; tanggal: string; pembina: string }
-  onToggle: () => void
-  onDetailChange: (field: "tanggal" | "pembina", value: string) => void
-  onCetakPiagam: () => void
-}) {
-  const isLulus = progress?.status === "lulus"
-
-  return (
-    <div className={`p - 3 border rounded - lg ${isLulus ? "border-emerald-300 bg-emerald-50" : "border-border"} `}>
-      <div className="flex items-start gap-3">
-        <button
-          onClick={onToggle}
-          className={`mt - 1 w - 6 h - 6 rounded border - 2 flex items - center justify - center flex - shrink - 0 ${isLulus ? "bg-emerald-500 border-emerald-500 text-white" : "border-gray-300"
-            } `}
-        >
-          {isLulus && "✓"}
-        </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">{tkk.icon}</span>
-            <span className={`font - medium ${isLulus ? "text-emerald-700" : ""} `}>{tkk.nama}</span>
-          </div>
-          {isLulus && (
-            <div className="mt-2 space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Tanggal Uji</Label>
-                  <Input
-                    type="date"
-                    value={progress?.tanggal || ""}
-                    onChange={(e) => onDetailChange("tanggal", e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Pembina Penguji</Label>
-                  <Input
-                    type="text"
-                    placeholder="Nama pembina"
-                    value={progress?.pembina || ""}
-                    onChange={(e) => onDetailChange("pembina", e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                </div>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onCetakPiagam}
-                className="w-full text-xs h-8 border-emerald-500 text-emerald-600 hover:bg-emerald-50"
-              >
-                🏆 Cetak Piagam TKK
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Component: Piagam TKK Modal
-function PiagamTKKModal({
-  peserta,
-  tkk,
-  tanggalUji,
-  onClose,
-}: {
-  peserta: PesertaRecord
-  tkk: TKKItem
-  tanggalUji: string
-  onClose: () => void
-}) {
-  const [tanggalLulus, setTanggalLulus] = useState(tanggalUji || new Date().toISOString().split("T")[0])
-  const [pembinaGudep, setPembinaGudep] = useState("")
-  const [ketuaGudep, setKetuaGudep] = useState("")
-  const [saving, setSaving] = useState(false)
-
-  const handleCetakPDF = async () => {
-    setSaving(true)
-
-    // Save to database
-    const supabase = createClient()
-    await supabase.from("piagam_tkk").upsert({
-      peserta_id: peserta.id,
-      tkk_id: tkk.id,
-      nama_tkk: tkk.nama,
-      tanggal_uji: tanggalUji || null,
-      tanggal_lulus: tanggalLulus,
-      pembina_gudep: pembinaGudep,
-      ketua_gudep: ketuaGudep,
-    })
-
-    // Generate PDF
-    const printContent = `
-    < html >
-        <head>
-          <title>Piagam TKK ${tkk.nama}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 3px double #333; padding-bottom: 20px; }
-            .logo { font-size: 48px; margin-bottom: 10px; }
-            .title { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
-            .subtitle { font-size: 14px; color: #666; }
-            .content { line-height: 1.8; margin: 30px 0; text-align: center; }
-            .tkk-badge { font-size: 64px; margin: 20px 0; }
-            .tkk-name { font-size: 20px; font-weight: bold; color: #2563eb; margin-bottom: 20px; }
-            .data-table { width: 80%; margin: 20px auto; text-align: left; }
-            .data-table td { padding: 8px 10px; }
-            .data-table td:first-child { width: 150px; font-weight: bold; }
-            .signatures { display: flex; justify-content: space-between; margin-top: 60px; padding: 0 40px; }
-            .signature-box { text-align: center; width: 200px; }
-            .signature-line { border-top: 1px solid #333; margin-top: 60px; padding-top: 5px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="logo">⚜️</div>
-            <div class="title">PIAGAM TANDA KECAKAPAN KHUSUS</div>
-            <div class="subtitle">Gugus Depan SD Kedondong Sokaraja</div>
-          </div>
-          
-          <div class="content">
-            <p>Diberikan kepada:</p>
-            
-            <table class="data-table">
-              <tr><td>Nama</td><td>: ${peserta.nama_lengkap}</td></tr>
-              <tr><td>Golongan</td><td>: ${peserta.golongan}</td></tr>
-              <tr><td>Gugus Depan</td><td>: SD Kedondong Sokaraja</td></tr>
-            </table>
-            
-            <p>Telah menyelesaikan uji kecakapan dan dinyatakan <strong>LULUS</strong></p>
-            
-            <div class="tkk-badge">${tkk.icon}</div>
-            <div class="tkk-name">TKK ${tkk.nama.toUpperCase()}</div>
-            
-            <table class="data-table">
-              <tr><td>Tanggal Uji</td><td>: ${tanggalUji ? new Date(tanggalUji).toLocaleDateString("id-ID") : "-"}</td></tr>
-              <tr><td>Tanggal Lulus</td><td>: ${new Date(tanggalLulus).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</td></tr>
-            </table>
-          </div>
-          
-          <div class="signatures">
-            <div class="signature-box">
-              <p>Mengetahui,</p>
-              <p>Pembina Gudep</p>
-              <div class="signature-line">
-                <strong>${pembinaGudep || "____________________"}</strong>
-              </div>
-            </div>
-            <div class="signature-box">
-              <p>&nbsp;</p>
-              <p>Ketua Gudep</p>
-              <div class="signature-line">
-                <strong>${ketuaGudep || "____________________"}</strong>
-              </div>
-            </div>
-          </div>
-        </body>
-      </html >
-    `
-
-    const printWindow = window.open("", "_blank")
-    if (printWindow) {
-      printWindow.document.write(printContent)
-      printWindow.document.close()
-      printWindow.print()
-    }
-
-    setSaving(false)
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-lg shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-bold mb-4">Cetak Piagam TKK</h2>
-
-        <div className="space-y-4">
-          <div className="text-center p-4 bg-secondary rounded-lg">
-            <div className="text-4xl mb-2">{tkk.icon}</div>
-            <div className="font-bold">{tkk.nama}</div>
-          </div>
-
-          <div>
-            <Label>Nama</Label>
-            <Input value={peserta.nama_lengkap} disabled className="bg-secondary" />
-          </div>
-          <div>
-            <Label>Golongan</Label>
-            <Input value={peserta.golongan} disabled className="bg-secondary" />
-          </div>
-          <div>
-            <Label>Gugus Depan</Label>
-            <Input value="SD Kedondong Sokaraja" disabled className="bg-secondary" />
-          </div>
-          <div>
-            <Label>Nama TKK</Label>
-            <Input value={tkk.nama} disabled className="bg-secondary" />
-          </div>
-          <div>
-            <Label>Tanggal Uji</Label>
-            <Input value={tanggalUji || "-"} disabled className="bg-secondary" />
-          </div>
-          <div>
-            <Label>Tanggal Lulus</Label>
-            <Input type="date" value={tanggalLulus} onChange={(e) => setTanggalLulus(e.target.value)} />
-          </div>
-          <div>
-            <Label>Pembina Gudep</Label>
-            <Input
-              placeholder="Nama pembina gudep"
-              value={pembinaGudep}
-              onChange={(e) => setPembinaGudep(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Ketua Gudep</Label>
-            <Input
-              placeholder="Nama ketua gudep"
-              value={ketuaGudep}
-              onChange={(e) => setKetuaGudep(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="flex gap-3 mt-6">
-          <Button variant="outline" onClick={onClose} className="flex-1">
-            Batal
-          </Button>
-          <Button onClick={handleCetakPDF} className="flex-1" disabled={saving}>
-            {saving ? "Memproses..." : "Cetak PDF"}
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
