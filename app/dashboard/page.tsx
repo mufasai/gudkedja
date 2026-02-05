@@ -23,7 +23,7 @@ const MENU_ITEMS = [
   },
   {
     id: 3,
-    title: "Cetak Sertifikat SKK",
+    title: "Cetak Piagam SKK",
     icon: "🏆",
     color: "from-amber-400 to-amber-600",
     href: "/dashboard/cetak-skk",
